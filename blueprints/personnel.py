@@ -821,12 +821,22 @@ def calculate_learning_ability_longterm(score_list: List[float], config: dict = 
     # Step 4: 计算长周期成长分
     # 基准分为年均分，斜率乘以放大因子
     slope_amplifier = learning_config.get('slope_amplifier', 10)
+    if slope_amplifier is None:
+        slope_amplifier = 10
     learning_score = average_score + (k * slope_amplifier)
 
     # Step 5: 年度定级逻辑（使用配置参数）
     potential_threshold = learning_config.get('potential_threshold', 0.5)
+    if potential_threshold is None:
+        potential_threshold = 0.5
+
     decline_threshold = learning_config.get('decline_threshold', -0.2)
+    if decline_threshold is None:
+        decline_threshold = -0.2
+
     decline_penalty = learning_config.get('decline_penalty', 0.8)
+    if decline_penalty is None:
+        decline_penalty = 0.8
 
     tier = '稳健型'
     status_color = 'GREEN'
