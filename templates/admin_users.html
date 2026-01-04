@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">用户管理</h5>
+    <small class="text-muted">管理系统用户和权限</small>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('departments.index') }}" class="btn btn-outline-secondary btn-sm">部门管理</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="card-title">新增用户</h6>
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input class="form-control" name="username" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">初始密码</label>
+            <input class="form-control" type="password" name="password" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">所属部门</label>
+            <select name="department_id" class="form-select">
+              <option value="">请选择部门</option>
+              {% for dept in departments %}
+              <option value="{{ dept.id }}">{{ dept.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">用户角色</label>
+            <select name="role" class="form-select">
+              <option value="user">普通用户</option>
+              <option value="manager">部门管理员</option>
+              <option value="admin">系统管理员</option>
+            </select>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">创建用户</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="card-title">用户列表</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>ID</th>
+                <th>用户名</th>
+                <th>部门</th>
+                <th>角色</th>
+                <th>创建时间</th>
+                <th style="width:200px">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in users %}
+              <tr>
+                <td>{{ u['id'] }}</td>
+                <td>
+                  <strong>{{ u['username'] }}</strong>
+                </td>
+                <td>
+                  {% if u['department_name'] %}
+                    <span class="badge bg-info">{{ u['department_name'] }}</span>
+                  {% else %}
+                    <small class="text-muted">未分配</small>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if u['role'] == 'admin' %}
+                    <span class="badge bg-danger">管理员</span>
+                  {% elif u['role'] == 'manager' %}
+                    <span class="badge bg-warning text-dark">部门管理员</span>
+                  {% else %}
+                    <span class="badge bg-secondary">普通用户</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <small>{{ u['created_at'] }}</small>
+                </td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <a class="btn btn-outline-secondary"
+                       href="{{ url_for('admin.users', action='reset', id=u['id'], newpw='123456') }}"
+                       onclick="return confirm('重置密码为 123456?')"
+                       title="重置密码">
+                      <i class="fas fa-key"></i>
+                    </a>
+                    {% if u['id'] != 1 %}
+                    <button class="btn btn-outline-primary"
+                            onclick="editUser({{ u['id'] }}, '{{ u['username'] }}', '{{ u['department_id'] or '' }}', '{{ u['role'] }}')"
+                            title="编辑用户">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <a class="btn btn-outline-danger"
+                       href="{{ url_for('admin.users', action='delete', id=u['id']) }}"
+                       onclick="return confirm('删除用户会清空其所有数据，确认删除？')"
+                       title="删除用户">
+                      <i class="fas fa-trash"></i>
+                    </a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑用户模态框 -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">编辑用户</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        <div class="modal-body">
+          <input type="hidden" name="action" value="edit_user">
+          <input type="hidden" name="user_id" id="editUserId">
+          <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" name="username" id="editUsername" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">所属部门</label>
+            <select name="department_id" id="editDepartment" class="form-select">
+              <option value="">请选择部门</option>
+              {% for dept in departments %}
+              <option value="{{ dept.id }}">{{ dept.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">用户角色</label>
+            <select name="role" id="editRole" class="form-select">
+              <option value="user">普通用户</option>
+              <option value="manager">部门管理员</option>
+              <option value="admin">系统管理员</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function editUser(userId, username, departmentId, role) {
+  document.getElementById('editUserId').value = userId;
+  document.getElementById('editUsername').value = username;
+  document.getElementById('editDepartment').value = departmentId;
+  document.getElementById('editRole').value = role;
+
+  const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+  modal.show();
+}
+</script>
+{% endblock %}

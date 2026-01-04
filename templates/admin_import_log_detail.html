@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">导入日志详情 #{{ log['id'] }}</h5>
+    <small class="text-muted">查看导入操作的详细信息</small>
+  </div>
+  <div>
+    <a href="{{ url_for('admin.import_logs') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> 返回列表
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- 基本信息 -->
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="fas fa-info-circle"></i> 基本信息</h6>
+      </div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tbody>
+            <tr>
+              <th style="width: 120px">日志ID:</th>
+              <td><span class="badge bg-secondary">{{ log['id'] }}</span></td>
+            </tr>
+            <tr>
+              <th>模块:</th>
+              <td>
+                <span class="badge
+                  {% if log['module'] == 'personnel' %}bg-info
+                  {% elif log['module'] == 'performance' %}bg-primary
+                  {% elif log['module'] == 'training' %}bg-success
+                  {% elif log['module'] == 'safety' %}bg-warning text-dark
+                  {% endif %}">
+                  {{ log['module_display'] }}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>操作类型:</th>
+              <td><code>{{ log['operation'] }}</code></td>
+            </tr>
+            <tr>
+              <th>文件名:</th>
+              <td>
+                {% if log['file_name'] %}
+                  <i class="fas fa-file"></i> {{ log['file_name'] }}
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>操作时间:</th>
+              <td><i class="fas fa-clock"></i> {{ log['created_at'] }}</td>
+            </tr>
+            <tr>
+              <th>IP地址:</th>
+              <td>
+                {% if log['ip_address'] %}
+                  <code>{{ log['ip_address'] }}</code>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作用户信息 -->
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="fas fa-user"></i> 操作用户</h6>
+      </div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tbody>
+            <tr>
+              <th style="width: 120px">用户ID:</th>
+              <td>{{ log['user_id'] }}</td>
+            </tr>
+            <tr>
+              <th>用户名:</th>
+              <td><strong>{{ log['username'] }}</strong></td>
+            </tr>
+            <tr>
+              <th>用户角色:</th>
+              <td>
+                {% if log['user_role'] == 'admin' %}
+                  <span class="badge bg-danger">{{ log['role_display'] }}</span>
+                {% elif log['user_role'] == 'manager' %}
+                  <span class="badge bg-warning text-dark">{{ log['role_display'] }}</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ log['role_display'] }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>所属部门ID:</th>
+              <td>
+                {% if log['department_id'] %}
+                  {{ log['department_id'] }}
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>所属部门:</th>
+              <td>
+                {% if log['dept_name'] %}
+                  <span class="badge bg-info">{{ log['dept_name'] }}</span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入统计 -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="fas fa-chart-bar"></i> 导入统计</h6>
+      </div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-md-3">
+            <div class="border rounded p-3">
+              <h2 class="mb-1 text-secondary">{{ log['total_rows'] }}</h2>
+              <small class="text-muted">总行数</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-3">
+              <h2 class="mb-1 text-success">{{ log['success_rows'] }}</h2>
+              <small class="text-muted">成功导入</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-3">
+              <h2 class="mb-1 text-danger">{{ log['failed_rows'] }}</h2>
+              <small class="text-muted">失败</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-3">
+              <h2 class="mb-1 text-warning">{{ log['skipped_rows'] }}</h2>
+              <small class="text-muted">跳过</small>
+            </div>
+          </div>
+        </div>
+
+        {% if log['total_rows'] > 0 %}
+        <div class="progress mt-3" style="height: 25px">
+          {% set success_pct = (log['success_rows'] / log['total_rows'] * 100) | int %}
+          {% set failed_pct = (log['failed_rows'] / log['total_rows'] * 100) | int %}
+          {% set skipped_pct = (log['skipped_rows'] / log['total_rows'] * 100) | int %}
+
+          <div class="progress-bar bg-success" style="width: {{ success_pct }}%">
+            {{ success_pct }}%
+          </div>
+          <div class="progress-bar bg-danger" style="width: {{ failed_pct }}%">
+            {% if failed_pct > 0 %}{{ failed_pct }}%{% endif %}
+          </div>
+          <div class="progress-bar bg-warning" style="width: {{ skipped_pct }}%">
+            {% if skipped_pct > 0 %}{{ skipped_pct }}%{% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 错误信息 -->
+  {% if log['error_message'] %}
+  <div class="col-12">
+    <div class="card shadow-sm border-danger">
+      <div class="card-header bg-danger text-white">
+        <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> 错误信息</h6>
+      </div>
+      <div class="card-body">
+        <pre class="mb-0 text-danger">{{ log['error_message'] }}</pre>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 导入详情 -->
+  {% if log['details_parsed'] %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="fas fa-list"></i> 导入详情</h6>
+      </div>
+      <div class="card-body">
+        <table class="table table-sm table-bordered">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 30%">字段</th>
+              <th>值</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, value in log['details_parsed'].items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>
+                {% if value is mapping %}
+                  <pre class="mb-0">{{ value | tojson(indent=2) }}</pre>
+                {% elif value is iterable and value is not string %}
+                  <pre class="mb-0">{{ value | tojson(indent=2) }}</pre>
+                {% else %}
+                  {{ value }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 原始JSON数据 -->
+  {% if log['import_details'] %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fas fa-code"></i> 原始JSON数据</h6>
+        <button class="btn btn-sm btn-outline-secondary" onclick="copyJson()">
+          <i class="fas fa-copy"></i> 复制
+        </button>
+      </div>
+      <div class="card-body">
+        <pre id="jsonData" class="mb-0" style="max-height: 400px; overflow-y: auto;">{{ log['import_details'] }}</pre>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function copyJson() {
+  const jsonData = document.getElementById('jsonData');
+  const text = jsonData.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('JSON数据已复制到剪贴板');
+  }).catch(err => {
+    console.error('复制失败:', err);
+  });
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,24 @@
+# Core Flask dependencies
+Flask>=2.3.3
+Werkzeug>=2.3.7
+
+# Security enhancements
+Flask-WTF>=1.1.1
+WTForms>=3.1.0
+
+# Excel and PDF processing
+openpyxl>=3.1.2
+xlrd==1.2.0
+pdfplumber>=0.11.0
+PyPDF2>=3.0.0
+
+# Data processing (for learning ability calculation)
+numpy>=1.24.0
+
+# Development dependencies (optional)
+# pytest>=7.4.2
+# flask-testing>=0.8.1
+
+# Production server (optional)
+# gunicorn>=21.2.0
+# waitress>=2.1.2

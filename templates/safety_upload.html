@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="mb-2">上传安全检查数据</h1>
+  <p class="text-muted">支持上传安全检查Excel文件（.xlsx或.xls格式），系统将自动解析并导入记录。</p>
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">上传安全检查Excel</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('safety.upload_inspection') }}" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="file" class="form-label">选择Excel文件</label>
+            <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
+            <div class="form-text">支持 .xlsx 或 .xls 格式，文件应包含类别、日期等必要字段。</div>
+          </div>
+
+          <div class="alert alert-info">
+            <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>文件格式要求</h6>
+            <ul class="mb-0">
+              <li>必须包含"类别"和"日期"列</li>
+              <li>建议包含：地点、存在隐患和问题、整改措施、被检查人、责任车队、整改情况等字段</li>
+              <li>日期支持Excel日期格式或文本格式（YYYY-MM-DD）</li>
+              <li>系统会自动识别表头行，跳过空行</li>
+            </ul>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload me-2"></i>开始导入
+            </button>
+            <a href="{{ url_for('safety.records') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-2"></i>返回记录列表
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h6 class="mb-0">导入提示</h6>
+      </div>
+      <div class="card-body">
+        <ul class="mb-0">
+          <li>请确保Excel文件格式正确</li>
+          <li>重复导入会更新已有记录</li>
+          <li>导入后可在记录列表查看</li>
+          <li>支持批量导入大量数据</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-header bg-light">
+        <h6 class="mb-0">快速导航</h6>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('safety.records') }}" class="btn btn-outline-primary btn-sm">查看所有记录</a>
+          <a href="{{ url_for('safety.analytics') }}" class="btn btn-outline-primary btn-sm">查看统计分析</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

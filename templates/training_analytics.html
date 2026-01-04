@@ -1,0 +1,943 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">培训统计分析 <span id="pageDateRange" class="badge bg-primary" style="font-size: 0.7em; vertical-align: middle;"></span></h5>
+    <small class="text-muted">可视化分析培训数据和问题趋势</small>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('training.index') }}" class="btn btn-outline-secondary btn-sm">返回工作台</a>
+    <a href="{{ url_for('training.records') }}" class="btn btn-secondary btn-sm">查看记录</a>
+  </div>
+</div>
+
+<!-- 筛选区域 -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-2">
+        <label for="nameFilter" class="form-label">姓名</label>
+        <input type="text" id="nameFilter" class="form-control form-control-sm">
+      </div>
+      {% set col_class = 'col-md-2' %}
+      {% set show_quick_buttons = true %}
+      {% set show_range_label = true %}
+      {% include 'components/date_filter.html' %}
+      <div class="col-md-2">
+        <label for="qualifiedFilter" class="form-label">是否合格</label>
+        <select id="qualifiedFilter" class="form-select form-select-sm">
+          <option value="">全部</option>
+          <option value="1">合格</option>
+          <option value="0">不合格</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button id="filterBtn" class="btn btn-sm btn-primary w-100">
+          <i class="bi bi-search"></i> 查询
+        </button>
+      </div>
+      <div class="col-md-2">
+        <button id="resetBtn" class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-arrow-counterclockwise"></i> 重置为本月
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI 卡片 -->
+<div class="row g-4 mb-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">筛选区间内总人次</h6>
+        <p class="card-text fs-1 fw-bold" id="kpi-total-count">0</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">筛选区间内失格人次</h6>
+        <p class="card-text fs-1 fw-bold text-danger" id="kpi-disqualified-count">0</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 多标签页导航 -->
+<ul class="nav nav-tabs mb-3" id="analyticsTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
+      <i class="bi bi-bar-chart-fill"></i> 总览
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="project-tab" data-bs-toggle="tab" data-bs-target="#project" type="button" role="tab" aria-controls="project" aria-selected="false">
+      <i class="bi bi-diagram-3-fill"></i> 项目分析
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="personnel-tab" data-bs-toggle="tab" data-bs-target="#personnel" type="button" role="tab" aria-controls="personnel" aria-selected="false">
+      <i class="bi bi-people-fill"></i> 人员分析
+    </button>
+  </li>
+</ul>
+
+<!-- 标签页内容 -->
+<div class="tab-content" id="analyticsTabContent">
+  <!-- Tab 1: 总览 -->
+  <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview-tab">
+    <div class="row g-4 mb-4">
+      <div class="col-xl-6 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div id="problemTypeChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div id="projectDisqualifiedChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: 项目分析 -->
+  <div class="tab-pane fade" id="project" role="tabpanel" aria-labelledby="project-tab">
+    <div class="row g-4 mb-4">
+      <div class="col-xl-6 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div id="projectCountChart" style="width: 100%; min-height: 400px; height: 55vh; max-height: 700px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div id="wordCloudChart" style="width: 100%; min-height: 400px; height: 55vh; max-height: 700px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3: 人员分析 -->
+  <div class="tab-pane fade" id="personnel" role="tabpanel" aria-labelledby="personnel-tab">
+    <div class="row g-4 mb-4">
+      <div class="col-xl-8 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div id="personCountChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 col-lg-12">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="card-title text-center mb-3">班组/车队PK榜</h6>
+            <div id="teamRankList" style="max-height: 450px; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+              <!-- Ranking will be generated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div id="keyPersonnelTrendChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 引入 ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
+
+<!-- 引入日期筛选器库 -->
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Chart instances (initialized lazily)
+  let personCountChart = null;
+  let problemTypeChart = null;
+  let projectDisqualifiedChart = null;
+  let projectCountChart = null;
+  let wordCloudChart = null;
+  let keyPersonnelTrendChart = null;
+
+  // Track which tabs have been initialized
+  const tabsInitialized = {
+    overview: false,
+    project: false,
+    personnel: false
+  };
+
+  // Store fetched data for lazy loading
+  let cachedData = null;
+
+  // Initialize charts for a specific tab
+  function initializeTabCharts(tabName) {
+    if (tabsInitialized[tabName]) return;
+
+    switch(tabName) {
+      case 'overview':
+        problemTypeChart = echarts.init(document.getElementById('problemTypeChart'));
+        projectDisqualifiedChart = echarts.init(document.getElementById('projectDisqualifiedChart'));
+        if (cachedData) {
+          renderProblemTypeChart(cachedData);
+          renderProjectDisqualifiedChart(cachedData);
+        }
+        break;
+      case 'project':
+        projectCountChart = echarts.init(document.getElementById('projectCountChart'));
+        wordCloudChart = echarts.init(document.getElementById('wordCloudChart'));
+        if (cachedData) {
+          renderProjectCountChart(cachedData);
+          renderWordCloudChart(cachedData);
+        }
+        break;
+      case 'personnel':
+        personCountChart = echarts.init(document.getElementById('personCountChart'));
+        keyPersonnelTrendChart = echarts.init(document.getElementById('keyPersonnelTrendChart'));
+        if (cachedData) {
+          renderPersonCountChart(cachedData);
+          renderTeamRank(cachedData);
+          renderKeyPersonnelTrend(cachedData);
+        }
+        break;
+    }
+
+    tabsInitialized[tabName] = true;
+  }
+
+  // Tab switch event listener
+  const tabButtons = document.querySelectorAll('#analyticsTabs button[data-bs-toggle="tab"]');
+  tabButtons.forEach(button => {
+    button.addEventListener('shown.bs.tab', function (event) {
+      const targetId = event.target.getAttribute('data-bs-target').substring(1);
+      initializeTabCharts(targetId);
+
+      // Resize charts when switching tabs
+      if (targetId === 'overview' && problemTypeChart && projectDisqualifiedChart) {
+        problemTypeChart.resize();
+        projectDisqualifiedChart.resize();
+      } else if (targetId === 'project' && projectCountChart && wordCloudChart) {
+        projectCountChart.resize();
+        wordCloudChart.resize();
+      } else if (targetId === 'personnel' && personCountChart && keyPersonnelTrendChart) {
+        personCountChart.resize();
+        keyPersonnelTrendChart.resize();
+      }
+    });
+  });
+
+  // 更新页面日期范围显示
+  function updatePageDateRange() {
+    const startDate = document.getElementById('startDate')?.value;
+    const endDate = document.getElementById('endDate')?.value;
+    const dateRangeEl = document.getElementById('pageDateRange');
+
+    if (!dateRangeEl) return;
+
+    if (startDate || endDate) {
+      const start = startDate || '起始';
+      const end = endDate || '当前';
+      dateRangeEl.textContent = `${start} 至 ${end}`;
+      dateRangeEl.style.display = 'inline-block';
+    } else {
+      dateRangeEl.textContent = '全部数据';
+      dateRangeEl.style.display = 'inline-block';
+    }
+  }
+
+  function fetchAndRenderChart() {
+    const name = document.getElementById('nameFilter').value;
+    const qualified = document.getElementById('qualifiedFilter').value;
+
+    // 获取日期参数
+    const dateParams = dateFilter ? dateFilter.getParams() : { start_date: '', end_date: '' };
+
+    const params = new URLSearchParams();
+    if (name) params.append('name', name);
+    if (dateParams.start_date) params.append('start_date', dateParams.start_date);
+    if (dateParams.end_date) params.append('end_date', dateParams.end_date);
+    if (qualified) params.append('qualified', qualified);
+
+    const apiUrl = `{{ url_for('training.api_data') }}?${params.toString()}`;
+
+    // Show loading for initialized charts only
+    if (problemTypeChart) problemTypeChart.showLoading();
+    if (projectDisqualifiedChart) projectDisqualifiedChart.showLoading();
+    if (projectCountChart) projectCountChart.showLoading();
+    if (wordCloudChart) wordCloudChart.showLoading();
+    if (personCountChart) personCountChart.showLoading();
+    if (keyPersonnelTrendChart) keyPersonnelTrendChart.showLoading();
+
+    fetch(apiUrl)
+      .then(response => response.json())
+      .then(data => {
+        // Hide loading for initialized charts
+        if (problemTypeChart) problemTypeChart.hideLoading();
+        if (projectDisqualifiedChart) projectDisqualifiedChart.hideLoading();
+        if (projectCountChart) projectCountChart.hideLoading();
+        if (wordCloudChart) wordCloudChart.hideLoading();
+        if (personCountChart) personCountChart.hideLoading();
+        if (keyPersonnelTrendChart) keyPersonnelTrendChart.hideLoading();
+
+        // Cache data for lazy loading
+        cachedData = data;
+
+        // Update KPIs (always visible)
+        updateKpis(data);
+
+        // Render charts for currently active tab
+        if (tabsInitialized.overview) {
+          renderProblemTypeChart(data);
+          renderProjectDisqualifiedChart(data);
+        }
+        if (tabsInitialized.project) {
+          renderProjectCountChart(data);
+          renderWordCloudChart(data);
+        }
+        if (tabsInitialized.personnel) {
+          renderPersonCountChart(data);
+          renderTeamRank(data);
+          renderKeyPersonnelTrend(data);
+        }
+      })
+      .catch(error => {
+        // Hide loading for all initialized charts
+        if (problemTypeChart) try { problemTypeChart.hideLoading(); } catch(e) {}
+        if (projectDisqualifiedChart) try { projectDisqualifiedChart.hideLoading(); } catch(e) {}
+        if (projectCountChart) try { projectCountChart.hideLoading(); } catch(e) {}
+        if (wordCloudChart) try { wordCloudChart.hideLoading(); } catch(e) {}
+        if (personCountChart) try { personCountChart.hideLoading(); } catch(e) {}
+        if (keyPersonnelTrendChart) try { keyPersonnelTrendChart.hideLoading(); } catch(e) {}
+        console.error('Error fetching chart data:', error);
+      });
+  }
+
+  function updateKpis(data) {
+    document.getElementById('kpi-total-count').textContent = data.length;
+    const disqualifiedCount = data.filter(r => r.is_qualified === 0).length;
+    document.getElementById('kpi-disqualified-count').textContent = disqualifiedCount;
+  }
+
+  function renderPersonCountChart(data) {
+    if (!personCountChart) return;
+
+    const personCount = {};
+    data.forEach(record => {
+      personCount[record.name] = (personCount[record.name] || 0) + 1;
+    });
+    const sortedData = Object.entries(personCount).sort((a, b) => b[1] - a[1]);
+    const names = sortedData.map(item => item[0]);
+    const counts = sortedData.map(item => item[1]);
+
+    const option = {
+      title: { text: '人员实操次数统计', left: 'center' },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'category', data: names, axisLabel: { interval: 0, rotate: 30 } },
+      yAxis: { type: 'value', name: '次数' },
+      series: [{
+        name: '实操次数', type: 'bar', data: counts, barWidth: '60%',
+        label: { show: true, position: 'top' }
+      }],
+      dataZoom: [{ type: 'inside' }, { type: 'slider' }]
+    };
+    personCountChart.setOption(option);
+  }
+
+  function renderProblemTypeChart(data) {
+    if (!problemTypeChart) return;
+
+    // 统计所有记录的问题类型（包括合格和不合格）
+    const problemCount = {};
+    const qualifiedCount = {}; // 记录每种类型的合格数
+
+    data.forEach(record => {
+      const type = record.problem_type || '无问题';
+      problemCount[type] = (problemCount[type] || 0) + 1;
+
+      if (record.is_qualified === 1) {
+        qualifiedCount[type] = (qualifiedCount[type] || 0) + 1;
+      }
+    });
+
+    // 转换为图表数据，并添加合格率信息
+    const chartData = Object.entries(problemCount).map(([name, value]) => {
+      const qualified = qualifiedCount[name] || 0;
+      const qualifiedRate = ((qualified / value) * 100).toFixed(1);
+      return {
+        name: name,
+        value: value,
+        qualifiedRate: qualifiedRate,
+        qualified: qualified
+      };
+    });
+
+    const option = {
+      title: { text: '问题类型分布（全部记录）', left: 'center' },
+      tooltip: {
+        trigger: 'item',
+        formatter: function(params) {
+          return `${params.seriesName}<br/>${params.name}: ${params.value}次 (${params.percent}%)<br/>合格: ${params.data.qualified}次 (${params.data.qualifiedRate}%)`;
+        }
+      },
+      legend: { orient: 'vertical', left: 'left', top: '10%', type: 'scroll' },
+      series: [{
+        name: '问题类型',
+        type: 'pie',
+        radius: '65%',
+        center: ['50%', '60%'],
+        data: chartData,
+        emphasis: {
+          itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
+        },
+        label: {
+          formatter: '{b}\n{c}次 ({d}%)'
+        }
+      }]
+    };
+    problemTypeChart.setOption(option);
+  }
+
+  function renderProjectDisqualifiedChart(data) {
+    if (!projectDisqualifiedChart) return;
+
+    const disqualifiedData = data.filter(r => r.is_qualified === 0);
+    const projectCount = {};
+    disqualifiedData.forEach(record => {
+      const project = record.project_name || '未分类';
+      projectCount[project] = (projectCount[project] || 0) + 1;
+    });
+    const sortedData = Object.entries(projectCount).sort((a, b) => a[1] - b[1]);
+    const projects = sortedData.map(item => item[0]);
+    const counts = sortedData.map(item => item[1]);
+
+    const option = {
+      title: { text: '各个实操项目失格次数统计', left: 'center' },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'value', boundaryGap: [0, 0.01] },
+      yAxis: { type: 'category', data: projects },
+      series: [{
+        name: '失格次数',
+        type: 'bar',
+        data: counts,
+        label: { show: true, position: 'right' }
+      }]
+    };
+    projectDisqualifiedChart.setOption(option);
+  }
+
+  function renderProjectCountChart(data) {
+    if (!projectCountChart) return;
+
+    // 统计所有项目的总次数（包括合格和不合格）
+    const projectCount = {};
+    data.forEach(record => {
+      const project = record.project_name || '未分类';
+      projectCount[project] = (projectCount[project] || 0) + 1;
+    });
+
+    // 按次数降序排列，只取前20个
+    const sortedData = Object.entries(projectCount).sort((a, b) => b[1] - a[1]).slice(0, 20);
+    const projects = sortedData.map(item => item[0]);
+    const counts = sortedData.map(item => item[1]);
+
+    // Top 10 高亮处理
+    const itemStyleData = counts.map((count, index) => {
+      if (index < 10) {
+        // Top 10 使用渐变色高亮
+        return {
+          value: count,
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: '#4A90E2' },
+              { offset: 1, color: '#67B7DC' }
+            ])
+          }
+        };
+      } else {
+        // 其余弱化
+        return {
+          value: count,
+          itemStyle: {
+            color: '#95a5a6'
+          }
+        };
+      }
+    });
+
+    const option = {
+      title: {
+        text: '各实操项目总次数统计 (Top 20)',
+        subtext: 'Top 10 蓝色高亮 | 降序排列',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: function(params) {
+          const param = params[0];
+          const rank = sortedData.findIndex(item => item[0] === param.name) + 1;
+          return `排名 #${rank}<br/>${param.name}: ${param.value}次`;
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        top: '15%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        boundaryGap: [0, 0.01],
+        name: '次数',
+        nameLocation: 'end',
+        nameTextStyle: {
+          padding: [0, 0, 0, 10]
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: projects,
+        axisLabel: {
+          formatter: function(value) {
+            // 长文本截断并显示省略号
+            return value.length > 18 ? value.substring(0, 18) + '...' : value;
+          }
+        }
+      },
+      series: [{
+        name: '培训次数',
+        type: 'bar',
+        data: itemStyleData,
+        barWidth: '60%',
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}次',
+          fontSize: 11
+        },
+        emphasis: {
+          focus: 'self',
+          itemStyle: {
+            shadowBlur: 10,
+            shadowColor: 'rgba(0, 0, 0, 0.3)'
+          }
+        }
+      }],
+      dataZoom: projects.length > 15 ? [
+        {
+          type: 'inside',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100
+        },
+        {
+          type: 'slider',
+          yAxisIndex: 0,
+          start: 0,
+          end: 100,
+          width: 12,
+          right: 5
+        }
+      ] : []
+    };
+    projectCountChart.setOption(option);
+  }
+
+  function renderWordCloudChart(data) {
+    if (!wordCloudChart) return;
+
+    const disqualifiedData = data.filter(r => r.is_qualified === 0 && r.specific_problem && r.specific_problem.trim() !== '无');
+    const text = disqualifiedData.map(r => r.specific_problem).join(' ');
+
+    const wordCounts = {};
+    const words = text.split(/[;；,，.。\s\d+\.、]+/g);
+
+    words.forEach(word => {
+        const w = word.trim();
+        if (w && w.length > 1 && !['的', '了', '未', '或', '和', '与'].includes(w)) {
+            wordCounts[w] = (wordCounts[w] || 0) + 1;
+        }
+    });
+
+    const chartData = Object.entries(wordCounts).map(([name, value]) => ({ name, value }));
+
+    const option = {
+        title: {
+            text: '具体实操问题词云图',
+            left: 'center'
+        },
+        tooltip: { show: true },
+        series: [{
+            type: 'wordCloud',
+            shape: 'circle',
+            left: 'center',
+            top: 'center',
+            width: '90%',
+            height: '90%',
+            sizeRange: [12, 50],
+            rotationRange: [-90, 90],
+            rotationStep: 45,
+            gridSize: 8,
+            drawOutOfBound: false,
+            textStyle: {
+                color: function () {
+                    return 'rgb(' + [
+                        Math.round(Math.random() * 160),
+                        Math.round(Math.random() * 160),
+                        Math.round(Math.random() * 160)
+                    ].join(',') + ')';
+                }
+            },
+            emphasis: {
+                focus: 'self',
+                textStyle: { shadowBlur: 10, shadowColor: '#333' }
+            },
+            data: chartData
+        }]
+    };
+    wordCloudChart.setOption(option);
+  }
+
+  function renderTeamRank(data) {
+    const rankListEl = document.getElementById('teamRankList');
+    if (!rankListEl) return;
+
+    // 统计各班组的数据
+    const teamStats = {};
+    data.forEach(record => {
+        const team = record.team_name || '未分配班组';
+        if (!teamStats[team]) {
+            teamStats[team] = {
+                total: 0,
+                qualified: 0,
+                totalTime: 0,
+                timeCount: 0
+            };
+        }
+
+        teamStats[team].total++;
+        if (record.is_qualified === 1) {
+            teamStats[team].qualified++;
+        }
+
+        // 处理耗时（假设格式为 "5分钟" 或 "1.5小时"）
+        if (record.time_spent) {
+            const timeStr = record.time_spent.toString();
+            let minutes = 0;
+
+            if (timeStr.includes('小时')) {
+                const hours = parseFloat(timeStr);
+                if (!isNaN(hours)) minutes = hours * 60;
+            } else if (timeStr.includes('分钟')) {
+                minutes = parseFloat(timeStr);
+            } else {
+                // 尝试直接解析为数字（分钟）
+                const parsed = parseFloat(timeStr);
+                if (!isNaN(parsed)) minutes = parsed;
+            }
+
+            if (minutes > 0) {
+                teamStats[team].totalTime += minutes;
+                teamStats[team].timeCount++;
+            }
+        }
+    });
+
+    // 计算达标率和平均耗时
+    const teamData = Object.entries(teamStats).map(([name, stats]) => {
+        const qualifiedRate = stats.total > 0 ? (stats.qualified / stats.total * 100) : 0;
+        const avgTime = stats.timeCount > 0 ? (stats.totalTime / stats.timeCount) : 0;
+
+        return {
+            name: name,
+            total: stats.total,
+            qualified: stats.qualified,
+            qualifiedRate: qualifiedRate,
+            avgTime: avgTime
+        };
+    });
+
+    // 按达标率排序（达标率相同时按平均耗时升序）
+    const sortedTeams = teamData.sort((a, b) => {
+        if (Math.abs(a.qualifiedRate - b.qualifiedRate) > 0.1) {
+            return b.qualifiedRate - a.qualifiedRate;
+        }
+        // 达标率接近时，耗时越短越好
+        if (a.avgTime > 0 && b.avgTime > 0) {
+            return a.avgTime - b.avgTime;
+        }
+        return b.total - a.total;
+    });
+
+    if (sortedTeams.length === 0) {
+        rankListEl.innerHTML = '<p class="text-muted text-center mt-4">无班组数据</p>';
+        return;
+    }
+
+    const rankHtml = sortedTeams.map((team, index) => {
+        let rankBadge = '';
+        let rankColor = '';
+
+        if (index === 0) {
+            rankBadge = '<span class="badge rounded-pill bg-warning text-dark">🥇</span>';
+            rankColor = 'border-warning';
+        } else if (index === 1) {
+            rankBadge = '<span class="badge rounded-pill bg-secondary text-white">🥈</span>';
+            rankColor = 'border-secondary';
+        } else if (index === 2) {
+            rankBadge = '<span class="badge rounded-pill text-white" style="background-color: #cd7f32;">🥉</span>';
+            rankColor = 'border-secondary';
+        } else {
+            rankBadge = `<span class="badge rounded-pill bg-light text-dark">${index + 1}</span>`;
+        }
+
+        const qualifiedRateColor = team.qualifiedRate >= 90 ? 'success' : team.qualifiedRate >= 70 ? 'warning' : 'danger';
+        const avgTimeDisplay = team.avgTime > 0 ? `${team.avgTime.toFixed(1)}分钟` : '--';
+
+        return `
+            <div class="card mb-3 ${rankColor}" style="border-left-width: 3px;">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="d-flex align-items-center">
+                            ${rankBadge}
+                            <span class="ms-2 fw-bold">${team.name}</span>
+                        </div>
+                        <span class="badge bg-light text-dark">${team.total}次</span>
+                    </div>
+                    <div class="row g-2 small">
+                        <div class="col-6">
+                            <div class="text-muted">达标率</div>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-${qualifiedRateColor} me-1">${team.qualifiedRate.toFixed(1)}%</span>
+                                <small class="text-muted">${team.qualified}/${team.total}</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-muted">平均耗时</div>
+                            <div class="fw-bold text-primary">${avgTimeDisplay}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    rankListEl.innerHTML = rankHtml;
+  }
+
+  function renderKeyPersonnelTrend(data) {
+    if (!keyPersonnelTrendChart) return;
+
+    // 1. 计算每个人员的平均分
+    const personScores = {};
+    data.forEach(record => {
+      const name = record.name || '未知';
+      const score = record.score || 0;
+
+      if (!personScores[name]) {
+        personScores[name] = { total: 0, count: 0, records: [] };
+      }
+
+      personScores[name].total += score;
+      personScores[name].count++;
+      personScores[name].records.push({
+        date: record.training_date,
+        score: score
+      });
+    });
+
+    // 2. 计算平均分并排序
+    const personAvgScores = Object.entries(personScores).map(([name, stats]) => ({
+      name: name,
+      avgScore: stats.count > 0 ? stats.total / stats.count : 0,
+      records: stats.records
+    }));
+
+    // 按平均分升序排序,取最低的5人
+    const bottom5 = personAvgScores.sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
+
+    if (bottom5.length === 0) {
+      const option = {
+        title: { text: '重点人员成绩趋势（平均分最低Top 5）', left: 'center' },
+        graphic: {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: { text: '暂无数据', fontSize: 16, fill: '#999' }
+        }
+      };
+      keyPersonnelTrendChart.setOption(option);
+      return;
+    }
+
+    // 3. 准备时间轴数据（所有日期去重并排序）
+    const allDates = new Set();
+    bottom5.forEach(person => {
+      person.records.forEach(record => {
+        allDates.add(record.date);
+      });
+    });
+    const sortedDates = Array.from(allDates).sort();
+
+    // 4. 为每个人员准备完整的趋势数据
+    const series = bottom5.map((person, index) => {
+      // 按日期分组，计算当天的平均分
+      const dateScoreMap = {};
+      person.records.forEach(record => {
+        if (!dateScoreMap[record.date]) {
+          dateScoreMap[record.date] = [];
+        }
+        dateScoreMap[record.date].push(record.score);
+      });
+
+      // 计算每天的平均分
+      const scoreData = sortedDates.map(date => {
+        if (dateScoreMap[date]) {
+          const avg = dateScoreMap[date].reduce((a, b) => a + b, 0) / dateScoreMap[date].length;
+          return avg.toFixed(1);
+        }
+        return null; // 该日期没有数据
+      });
+
+      // 生成颜色
+      const colors = ['#d62728', '#ff7f0e', '#9467bd', '#8c564b', '#e377c2'];
+
+      return {
+        name: `${person.name} (均${person.avgScore.toFixed(1)})`,
+        type: 'line',
+        data: scoreData,
+        smooth: true,
+        connectNulls: true, // 连接空值
+        lineStyle: { width: 2 },
+        itemStyle: { color: colors[index % colors.length] },
+        emphasis: {
+          focus: 'series',
+          lineStyle: { width: 3 }
+        },
+        markLine: {
+          silent: true,
+          lineStyle: { type: 'dashed', color: '#999' },
+          data: [{ yAxis: person.avgScore.toFixed(1), name: '个人均线' }]
+        }
+      };
+    });
+
+    const option = {
+      title: {
+        text: '重点人员成绩趋势（平均分最低Top 5）',
+        subtext: '追踪后进人员进步情况',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' }
+      },
+      legend: {
+        data: bottom5.map(p => `${p.name} (均${p.avgScore.toFixed(1)})`),
+        bottom: 10,
+        type: 'scroll'
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        data: sortedDates,
+        boundaryGap: false,
+        axisLabel: {
+          rotate: 30,
+          formatter: function(value) {
+            // 格式化日期显示
+            return value.substring(5); // 只显示月-日
+          }
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: '分数',
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: '{value}' }
+      },
+      series: series,
+      dataZoom: [
+        {
+          type: 'inside',
+          start: 0,
+          end: 100
+        },
+        {
+          type: 'slider',
+          start: 0,
+          end: 100,
+          height: 20,
+          bottom: 50
+        }
+      ]
+    };
+
+    keyPersonnelTrendChart.setOption(option);
+  }
+
+  // 初始化日期筛选器
+  let dateFilter = null;
+
+  // 页面加载时初始化第一个标签页并执行查询
+  initializeTabCharts('overview'); // Initialize first tab
+
+  // 初始化DateFilterHelper
+  dateFilter = new DateFilterHelper({
+    defaultRange: 'current_month',
+    onDateChange: fetchAndRenderChart,
+    showQuickButtons: true,
+    validateDates: true,
+    updateCallback: updatePageDateRange
+  });
+
+  fetchAndRenderChart();
+
+  // 查询按钮事件
+  document.getElementById('filterBtn').addEventListener('click', fetchAndRenderChart);
+
+  // 重置按钮事件
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    if (dateFilter) {
+      dateFilter.setDefaultDates('current_month');
+    }
+    document.getElementById('nameFilter').value = '';
+    document.getElementById('qualifiedFilter').value = '';
+    fetchAndRenderChart();
+  });
+
+  // 监听窗口大小变化，重绘图表
+  window.addEventListener('resize', function() {
+    if (personCountChart) personCountChart.resize();
+    if (problemTypeChart) problemTypeChart.resize();
+    if (projectDisqualifiedChart) projectDisqualifiedChart.resize();
+    if (projectCountChart) projectCountChart.resize();
+    if (wordCloudChart) wordCloudChart.resize();
+    if (keyPersonnelTrendChart) keyPersonnelTrendChart.resize();
+  });
+});
+</script>
+{% endblock %}

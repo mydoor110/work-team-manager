@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="mb-2">安全检查记录
+    {% if start_date or end_date %}
+      <span class="badge bg-primary" style="font-size: 0.5em;">{{ start_date or '起始' }} 至 {{ end_date or '当前' }}</span>
+    {% else %}
+      <span class="badge bg-secondary" style="font-size: 0.5em;">全部数据</span>
+    {% endif %}
+  </h1>
+  <p class="text-muted">查看和管理所有安全检查记录，支持筛选、导出等操作。</p>
+</div>
+
+<!-- 筛选表单 -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('safety.records') }}">
+      <div class="row g-3 mb-3">
+        {% set start_date_id = 'start_date' %}
+        {% set end_date_id = 'end_date' %}
+        {% set col_class = 'col-md-2' %}
+        {% set start_date_value = start_date %}
+        {% set end_date_value = end_date %}
+        {% set show_quick_buttons = true %}
+        {% set show_range_label = false %}
+        {% include 'components/date_filter.html' %}
+        <div class="col-md-2">
+          <label for="category" class="form-label">类别</label>
+          <select class="form-select form-select-sm" id="category" name="category">
+            <option value="">全部</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="team" class="form-label">责任车队</label>
+          <select class="form-select form-select-sm" id="team" name="team">
+            <option value="">全部</option>
+            {% for t in teams %}
+            <option value="{{ t }}" {% if team_filter == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="inspected_person" class="form-label">被检查人</label>
+          <input type="text" class="form-control form-control-sm" id="inspected_person" name="inspected_person" value="{{ inspected_person_filter }}" placeholder="输入姓名">
+        </div>
+        <div class="col-md-2">
+          <label for="work_type" class="form-label">作业类型</label>
+          <select class="form-select form-select-sm" id="work_type" name="work_type">
+            <option value="">全部</option>
+            {% for wt in work_types %}
+            <option value="{{ wt }}" {% if work_type_filter == wt %}selected{% endif %}>{{ wt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label for="rectification_status" class="form-label">整改状态</label>
+          <select class="form-select form-select-sm" id="rectification_status" name="rectification_status">
+            <option value="">全部</option>
+            <option value="已整改" {% if rectification_status_filter == '已整改' %}selected{% endif %}>已整改</option>
+            <option value="未整改" {% if rectification_status_filter == '未整改' %}selected{% endif %}>未整改</option>
+            <option value="待整改" {% if rectification_status_filter == '待整改' %}selected{% endif %}>待整改</option>
+            <option value="整改中" {% if rectification_status_filter == '整改中' %}selected{% endif %}>整改中</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-search me-1"></i>筛选
+          </button>
+        </div>
+        <div class="col-md-2">
+          <a href="{{ url_for('safety.records') }}" class="btn btn-outline-secondary btn-sm w-100">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>重置
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 操作按钮 -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <span class="text-muted">共 {{ records|length }} 条记录</span>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('safety.export', start_date=start_date, end_date=end_date, category=category_filter, team=team_filter, inspected_person=inspected_person_filter, work_type=work_type_filter, rectification_status=rectification_status_filter) }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-download me-1"></i>导出Excel
+    </a>
+    <a href="{{ url_for('safety.upload') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-upload me-1"></i>上传数据
+    </a>
+    {% if user_role in ['admin', 'manager'] %}
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="batchDelete()">
+      <i class="bi bi-trash me-1"></i>批量删除
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 记录表格 -->
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0">
+        <thead class="table-light sticky-top">
+          <tr>
+            {% if user_role in ['admin', 'manager'] %}
+            <th style="width: 40px;">
+              <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll()">
+            </th>
+            {% endif %}
+            <th style="width: 100px;">检查日期</th>
+            <th style="width: 100px;">类别</th>
+            <th style="width: 120px;">地点</th>
+            <th>存在隐患和问题</th>
+            <th>整改措施</th>
+            <th style="width: 100px;">责任车队</th>
+            <th style="width: 120px;">整改情况</th>
+            {% if user_role in ['admin', 'manager'] %}
+            <th style="width: 100px;">操作</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% if records %}
+            {% for record in records %}
+            <tr>
+              {% if user_role in ['admin', 'manager'] %}
+              <td>
+                <input type="checkbox" class="form-check-input record-checkbox" value="{{ record.id }}">
+              </td>
+              {% endif %}
+              <td>{{ record.inspection_date }}</td>
+              <td>
+                <span class="badge bg-primary">{{ record.category }}</span>
+              </td>
+              <td>{{ record.location or '-' }}</td>
+              <td class="text-truncate" style="max-width: 300px;" title="{{ record.hazard_description }}">
+                {{ record.hazard_description or '-' }}
+              </td>
+              <td class="text-truncate" style="max-width: 300px;" title="{{ record.corrective_measures }}">
+                {{ record.corrective_measures or '-' }}
+              </td>
+              <td>{{ record.responsible_team or '-' }}</td>
+              <td>
+                <span class="badge {% if '已整改' in (record.rectification_status or '') %}bg-success{% elif '未整改' in (record.rectification_status or '') or not record.rectification_status %}bg-warning{% else %}bg-info{% endif %}">
+                  {{ record.rectification_status[:10] if record.rectification_status else '待整改' }}...
+                </span>
+              </td>
+              {% if user_role in ['admin', 'manager'] %}
+              <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewDetail({{ record.id }})">
+                  <i class="bi bi-eye"></i>
+                </button>
+                <form method="POST" action="{{ url_for('safety.delete_record', record_id=record.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除这条记录吗？');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="{% if user_role in ['admin', 'manager'] %}9{% else %}7{% endif %}" class="text-center text-muted py-4">
+                暂无安全检查记录
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 详情查看模态框 -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">安全检查记录详情</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="detailContent">
+        <div class="text-center text-muted py-4">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">加载中...</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 引入日期筛选器库 -->
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+// 初始化日期筛选器（增强表单提交体验）
+document.addEventListener('DOMContentLoaded', function() {
+  new DateFilterHelper({
+    startDateId: 'start_date',
+    endDateId: 'end_date',
+    showQuickButtons: true,
+    validateDates: true
+  });
+});
+
+// 全选/取消全选
+function toggleSelectAll() {
+  const selectAll = document.getElementById('selectAll');
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+// 批量删除
+function batchDelete() {
+  const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+  if (checkboxes.length === 0) {
+    alert('请先选择要删除的记录');
+    return;
+  }
+
+  if (!confirm(`确定要删除选中的 ${checkboxes.length} 条记录吗？`)) {
+    return;
+  }
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = "{{ url_for('safety.batch_delete_records') }}";
+
+  // Add CSRF token
+  const csrfInput = document.createElement('input');
+  csrfInput.type = 'hidden';
+  csrfInput.name = 'csrf_token';
+  csrfInput.value = '{{ csrf_token() }}';
+  form.appendChild(csrfInput);
+
+  checkboxes.forEach(cb => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'record_ids';
+    input.value = cb.value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// 查看详情
+function viewDetail(recordId) {
+  const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+  const detailContent = document.getElementById('detailContent');
+
+  // 从记录中查找对应的数据
+  const records = {{ records|tojson }};
+  const record = records.find(r => r.id === recordId);
+
+  if (record) {
+    // 按照数据库字段顺序显示,确保一致性
+    detailContent.innerHTML = `
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">类别</label>
+          <div><span class="badge bg-primary">${record.category || '-'}</span></div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">检查日期</label>
+          <div>${record.inspection_date || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">地点</label>
+          <div>${record.location || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">被检查人</label>
+          <div>${record.inspected_person || '-'}</div>
+        </div>
+        <div class="col-12 mb-3">
+          <label class="text-muted small">存在隐患和问题</label>
+          <div class="alert alert-warning mb-0">${record.hazard_description || '-'}</div>
+        </div>
+        <div class="col-12 mb-3">
+          <label class="text-muted small">整改措施及其它意见</label>
+          <div class="alert alert-info mb-0">${record.corrective_measures || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">整改期限</label>
+          <div>${record.deadline_date || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">责任车队</label>
+          <div>${record.responsible_team || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">考核情况</label>
+          <div>${record.assessment || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">整改人</label>
+          <div>${record.rectifier || '-'}</div>
+        </div>
+        <div class="col-12 mb-3">
+          <label class="text-muted small">整改情况</label>
+          <div class="alert alert-success mb-0">${record.rectification_status || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">作业类型</label>
+          <div>${record.work_type || '-'}</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="text-muted small">责任点位</label>
+          <div>${record.responsibility_location || '-'}</div>
+        </div>
+        <div class="col-12 mb-3">
+          <label class="text-muted small">检查项目</label>
+          <div>${record.inspection_item || '-'}</div>
+        </div>
+      </div>
+    `;
+    modal.show();
+  }
+}
+</script>
+{% endblock %}

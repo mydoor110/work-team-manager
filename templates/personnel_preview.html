@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between mb-4">
+  <div>
+    <h1 class="mb-1">{{ person.name }} <span class="text-muted fs-5">({{ person.emp_no }})</span></h1>
+    <p class="text-muted mb-0">档案信息修改后自动保存，刷新页面即可查看最新数据。</p>
+  </div>
+  <a class="btn btn-outline-secondary btn-sm mt-3 mt-lg-0" href="{{ url_for('personnel.index') }}">返回列表</a>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light">关键指标</div>
+      <div class="card-body">
+        <div class="row text-center g-3">
+          <div class="col-4">
+            <div class="text-muted small">年龄</div>
+            <div class="fs-4" id="metric-age">{{ person.age if person.age is not none else "-" }}</div>
+          </div>
+          <div class="col-4">
+            <div class="text-muted small">工龄</div>
+            <div class="fs-4" id="metric-working">
+              {% if person.working_years is not none %}
+              {{ "%.1f"|format(person.working_years) }}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+            <div class="text-muted small">年</div>
+          </div>
+          <div class="col-4">
+            <div class="text-muted small">司龄</div>
+            <div class="fs-4" id="metric-tenure">
+              {% if person.tenure_years is not none %}
+              {{ "%.1f"|format(person.tenure_years) }}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+            <div class="text-muted small">年</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <span>人员基础信息</span>
+        <span class="badge bg-secondary">创建时间：{{ person.created_at }}</span>
+      </div>
+      <div class="card-body">
+        <div id="update-status" class="alert alert-info py-2 px-3 small mb-3">
+          修改任意字段后将自动保存，保存结果在此提示。
+        </div>
+        <form class="row g-3" id="personnel-edit-form" autocomplete="off">
+          {% for field in field_scheme %}
+          {% set name = field.name %}
+          {% set label = field.label %}
+          {% set input_type = field.input_type %}
+          {% set required = field.required %}
+          {% set value = person[name] %}
+          <div class="col-12 col-md-6">
+            <label class="form-label">
+              {{ label }}
+              {% if required %}
+              <span class="text-danger">*</span>
+              {% endif %}
+            </label>
+            {% if name == "emp_no" %}
+            <input type="text" class="form-control" value="{{ value }}" readonly>
+            {% elif input_type == "textarea" %}
+            <textarea class="form-control" rows="3" data-field="{{ name }}" data-label="{{ label }}">{{ value or "" }}</textarea>
+            {% elif input_type == "select" %}
+            <select class="form-select" data-field="{{ name }}" data-label="{{ label }}">
+              <option value="">未填写</option>
+              {% for option in select_options.get(name, []) %}
+              <option value="{{ option }}" {% if value == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+            {% elif input_type == "date" %}
+            <input type="date" class="form-control" data-field="{{ name }}" data-label="{{ label }}" value="{{ value or "" }}">
+            {% else %}
+            <input type="text" class="form-control" data-field="{{ name }}" data-label="{{ label }}" value="{{ value or "" }}" {% if required %}required{% endif %}>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const updateUrl = "{{ url_for('personnel.update', emp_no=person.emp_no) }}";
+    const statusBox = document.getElementById("update-status");
+    const inputs = Array.from(document.querySelectorAll("#personnel-edit-form [data-field]"));
+
+    function setStatus(message, level = "info") {
+      statusBox.textContent = message;
+      statusBox.className = "alert alert-" + level + " py-2 px-3 small mb-3";
+    }
+
+    function updateMetrics(person) {
+      const ageEl = document.getElementById("metric-age");
+      const workingEl = document.getElementById("metric-working");
+      const tenureEl = document.getElementById("metric-tenure");
+      if (ageEl) ageEl.textContent = person.age ?? "-";
+      if (workingEl) workingEl.textContent = person.working_years !== null && person.working_years !== undefined ? person.working_years.toFixed(1) : "-";
+      if (tenureEl) tenureEl.textContent = person.tenure_years !== null && person.tenure_years !== undefined ? person.tenure_years.toFixed(1) : "-";
+    }
+
+    function sendUpdate(input) {
+      const field = input.dataset.field;
+      const label = input.dataset.label || field;
+      const value = input.value;
+      setStatus("正在保存 “" + label + "” ...", "info");
+      input.classList.remove("is-invalid");
+      fetch(updateUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field, value })
+      })
+        .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+        .then(({ ok, body }) => {
+          if (!ok || !body.ok) {
+            throw new Error(body.message || "保存失败");
+          }
+          updateMetrics(body.person);
+          setStatus("已保存 “" + label + "”。", "success");
+        })
+        .catch((err) => {
+          setStatus(err.message || "保存失败，请稍后再试。", "danger");
+          input.classList.add("is-invalid");
+        });
+    }
+
+    inputs.forEach((input) => {
+      const handler = () => sendUpdate(input);
+      if (input.tagName === "TEXTAREA") {
+        input.addEventListener("blur", handler);
+      } else {
+        input.addEventListener("change", handler);
+      }
+    });
+  })();
+</script>
+{% endblock %}

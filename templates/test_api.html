@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>API测试</title>
+</head>
+<body>
+    <h1>培训能力画像 API 测试</h1>
+    <button onclick="testStudentsList()">测试学员列表API</button>
+    <button onclick="testStudentDetail()">测试学员详情API</button>
+    <button onclick="testStudentGrowth()">测试成长趋势API</button>
+    <pre id="output"></pre>
+
+    <script>
+        function log(msg) {
+            document.getElementById('output').textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        async function testStudentsList() {
+            document.getElementById('output').textContent = '';
+            log('测试 /training/api/students-list ...');
+            try {
+                const response = await fetch('/training/api/students-list');
+                log('状态码: ' + response.status);
+                const data = await response.json();
+                log('返回数据: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('错误: ' + error.message);
+            }
+        }
+
+        async function testStudentDetail() {
+            document.getElementById('output').textContent = '';
+            log('测试 /training/api/student-detail/103280 ...');
+            try {
+                const response = await fetch('/training/api/student-detail/103280');
+                log('状态码: ' + response.status);
+                const data = await response.json();
+                log('返回数据: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('错误: ' + error.message);
+            }
+        }
+
+        async function testStudentGrowth() {
+            document.getElementById('output').textContent = '';
+            log('测试 /training/api/student-growth/103280 ...');
+            try {
+                const response = await fetch('/training/api/student-growth/103280');
+                log('状态码: ' + response.status);
+                const data = await response.json();
+                log('返回数据: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('错误: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

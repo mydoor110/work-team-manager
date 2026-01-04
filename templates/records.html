@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block content %}
+{% if view_mode == "single" %}
+<div class="page-header-card card border-0 shadow-sm mb-4">
+  <div class="card-body d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+    <div>
+      <h5 class="mb-1">月度记录 · {{ period_title }}</h5>
+      {% if avg_score %}<div class="text-muted small">本月平均分：{{ avg_score }}</div>{% endif %}
+    </div>
+    <div class="d-flex flex-column flex-md-row gap-2 align-items-md-end">
+      <form class="row gy-2 gx-2 align-items-end" method="get" action="{{ url_for('performance.records') }}">
+        <div class="col-auto">
+          <label class="form-label form-label-sm">年份</label>
+          <select class="form-select form-select-sm" name="year">
+            {% for y in year_options %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label form-label-sm">月份</label>
+          <select class="form-select form-select-sm" name="month">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ '%02d' % m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-primary btn-sm" type="submit">查看</button>
+        </div>
+      </form>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('performance.records', year=year) }}">年度总览</a>
+      {% if year and month %}
+      <a class="btn btn-soft-primary btn-sm" href="{{ url_for('performance.export_single', year=year, month=month) }}">导出 Excel</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    {% if user_role in ['manager', 'admin'] %}
+    <div class="mb-3 d-flex justify-content-end">
+      <button type="button" class="btn btn-danger btn-sm" id="batchDeleteBtn" onclick="batchDelete()" style="display:none;">
+        <i class="fas fa-trash me-1"></i>批量删除
+      </button>
+    </div>
+    {% endif %}
+    <div class="table-responsive table-sticky-head table-sticky-first">
+      <table class="table table-modern table-hover table-sm align-middle">
+        <thead>
+          <tr>
+            {% if user_role in ['manager', 'admin'] %}
+            <th style="width:40px">
+              <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll(this)">
+            </th>
+            {% endif %}
+            <th class="sticky-col">人员</th>
+            <th class="text-center">年份</th>
+            <th class="text-center">月份</th>
+            <th class="text-end">分数</th>
+            <th class="text-center">等级</th>
+            {% if user_role in ['manager', 'admin'] %}
+            <th class="text-center" style="width:160px">操作</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            {% if user_role in ['manager', 'admin'] %}
+            <td>
+              <input type="checkbox" class="form-check-input record-checkbox" value="{{ r['id'] }}" onchange="updateBatchDeleteBtn()">
+            </td>
+            {% endif %}
+            <td class="sticky-col person-cell">
+              <div class="person-name">{{ r['name'] }}</div>
+              <div class="person-meta">工号：{{ r['emp_no'] }}</div>
+            </td>
+            <td class="text-center">{{ r['year'] }}</td>
+            <td class="text-center">{{ r['month'] }}</td>
+            <td class="text-end">{{ r['score'] }}</td>
+            <td class="text-center">{{ r['grade'] }}</td>
+            {% if user_role in ['manager', 'admin'] %}
+            <td class="text-center">
+              <button class="btn btn-outline-primary btn-sm"
+                      onclick="editRecord({{ r['id'] }}, '{{ r['emp_no'] }}', '{{ r['name'] }}', {{ r['year'] }}, {{ r['month'] }}, {{ r['score'] }}, '{{ r['grade'] }}')">
+                <i class="fas fa-edit me-1"></i>编辑
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if not rows %}
+    <div class="alert alert-warning mb-0 mt-3">暂无数据。请先 <a href="{{ url_for('performance.upload') }}">上传 PDF</a>。</div>
+    {% endif %}
+  </div>
+</div>
+
+{% else %}
+<div class="page-header-card card border-0 shadow-sm mb-4">
+  <div class="card-body d-flex flex-column gap-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h5 class="mb-1">年度总览 · {{ period_title }}</h5>
+        <div class="text-muted small">滚动查看全年绩效，支持快速筛选与排序。</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-soft-primary btn-sm" href="{{ url_for('performance.export_yearly', year=year, sort=sort, grade=selected_grades, min_score=min_score_filter if min_score_filter else None) }}">导出 Excel</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('performance.upload') }}">上传 PDF</a>
+      </div>
+    </div>
+    <form class="row gy-2 gx-3 align-items-end" method="get" action="{{ url_for('performance.records') }}">
+      <div class="col-sm-3 col-md-2">
+        <label class="form-label form-label-sm">年份</label>
+        <select class="form-select form-select-sm" name="year">
+          {% for y in year_options %}
+          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-9 col-md-5">
+        <label class="form-label form-label-sm">筛选绩效等级</label>
+        <select class="form-select" name="grade" multiple size="{{ grade_select_size }}">
+          {% for g in grade_choices %}
+          <option value="{{ g }}" {% if g in (selected_grades or []) %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">按住 Ctrl / ⌘ 可多选</div>
+      </div>
+      <div class="col-sm-4 col-md-2">
+        <label class="form-label form-label-sm">平均分 ≥</label>
+        <input class="form-control form-control-sm" type="number" step="0.01" name="min_score" value="{{ min_score_filter }}">
+      </div>
+      <div class="col-sm-8 col-md-3 d-flex flex-wrap gap-2">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <button class="btn btn-primary btn-sm" type="submit">应用筛选</button>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('performance.records', year=year, sort=sort) }}">清除筛选</a>
+      </div>
+    </form>
+    <div class="d-flex flex-wrap justify-content-end gap-2">
+      <div class="btn-group btn-group-sm" role="group">
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='avg_desc' else '' }}" href="{{ url_for('performance.records', year=year, sort='avg_desc', grade=selected_grades, min_score=min_score_filter if min_score_filter else None) }}">按平均分↓</a>
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='avg_asc' else '' }}" href="{{ url_for('performance.records', year=year, sort='avg_asc', grade=selected_grades, min_score=min_score_filter if min_score_filter else None) }}">按平均分↑</a>
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='emp' else '' }}" href="{{ url_for('performance.records', year=year, sort='emp', grade=selected_grades, min_score=min_score_filter if min_score_filter else None) }}">按工号</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="table-responsive table-sticky-head table-sticky-first">
+      <table class="table table-modern table-striped table-sm align-middle">
+        <thead>
+          <tr>
+            <th class="sticky-col">人员</th>
+            {% for _y, m in months %}
+            <th colspan="2" class="text-center">{{ m }}月</th>
+            {% endfor %}
+            <th class="text-end">平均分</th>
+          </tr>
+          <tr>
+            <th class="sticky-col"></th>
+            {% for _y, m in months %}
+            <th class="text-end text-muted">分</th>
+            <th class="text-center text-muted">等</th>
+            {% endfor %}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data %}
+          <tr>
+            <td class="sticky-col person-cell">
+              <div class="person-name">{{ r.name }}</div>
+              <div class="person-meta">工号：{{ r.emp_no }}</div>
+            </td>
+            {% for cell in r.detail %}
+            <td class="text-end">{{ cell.score if cell else '' }}</td>
+            <td class="text-center">{{ cell.grade if cell else '' }}</td>
+            {% endfor %}
+            <td class="text-end fw-semibold">{{ r.avg_score or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if not data %}
+    <div class="alert alert-warning mb-0 mt-3">未找到符合条件的数据。</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if user_role in ['manager', 'admin'] and view_mode == 'single' %}
+<!-- 编辑绩效记录模态框 -->
+<div class="modal fade" id="editRecordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">编辑绩效记录</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="editRecordForm">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">工号 *</label>
+              <input type="text" name="emp_no" id="editEmpNo" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">姓名 *</label>
+              <input type="text" name="name" id="editName" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">年份 *</label>
+              <input type="number" name="year" id="editYear" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">月份 *</label>
+              <input type="number" name="month" id="editMonth" class="form-control" min="1" max="12" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">分数 *</label>
+              <input type="number" name="score" id="editScore" class="form-control" step="0.01" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">等级 *</label>
+              <input type="text" name="grade" id="editGrade" class="form-control" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">确认删除</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>确定要删除 <strong id="deleteName"></strong> 的这条绩效记录吗？</p>
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          此操作不可恢复！
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <form method="post" id="deleteForm" style="display: inline;">
+          <button type="submit" class="btn btn-danger">确认删除</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function editRecord(id, empNo, name, year, month, score, grade) {
+  document.getElementById('editRecordForm').action = "{{ url_for('performance.edit_record', record_id=0) }}".replace('0', id);
+  document.getElementById('editEmpNo').value = empNo;
+  document.getElementById('editName').value = name;
+  document.getElementById('editYear').value = year;
+  document.getElementById('editMonth').value = month;
+  document.getElementById('editScore').value = score;
+  document.getElementById('editGrade').value = grade;
+
+  const modal = new bootstrap.Modal(document.getElementById('editRecordModal'));
+  modal.show();
+}
+
+function confirmDelete(id, name) {
+  document.getElementById('deleteName').textContent = name;
+  document.getElementById('deleteForm').action = "{{ url_for('performance.delete_record', record_id=0) }}".replace('0', id);
+
+  const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  modal.show();
+}
+
+function toggleSelectAll(checkbox) {
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+  });
+  updateBatchDeleteBtn();
+}
+
+function updateBatchDeleteBtn() {
+  const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+  const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+  if (checkboxes.length > 0) {
+    batchDeleteBtn.style.display = 'inline-block';
+    batchDeleteBtn.innerHTML = `<i class="fas fa-trash me-1"></i>批量删除 (${checkboxes.length})`;
+  } else {
+    batchDeleteBtn.style.display = 'none';
+  }
+
+  // 更新全选复选框状态
+  const allCheckboxes = document.querySelectorAll('.record-checkbox');
+  const selectAllCheckbox = document.getElementById('selectAll');
+  if (selectAllCheckbox) {
+    selectAllCheckbox.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+  }
+}
+
+function batchDelete() {
+  const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+  if (checkboxes.length === 0) {
+    alert('请至少选择一条记录');
+    return;
+  }
+
+  const ids = Array.from(checkboxes).map(cb => cb.value);
+  if (confirm(`确定要删除选中的 ${ids.length} 条绩效记录吗？此操作不可恢复！`)) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = "{{ url_for('performance.batch_delete_records') }}";
+
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+
+    ids.forEach(id => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'record_ids';
+      input.value = id;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endif %}
+{% endblock %}

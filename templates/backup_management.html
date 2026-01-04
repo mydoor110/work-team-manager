@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-3">
+                <i class="fas fa-database me-2"></i>备份管理
+            </h2>
+        </div>
+    </div>
+
+    <!-- Backup Statistics -->
+    {% if stats %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="fas fa-archive me-1"></i>备份总数
+                    </h6>
+                    <h3 class="card-title mb-0">{{ stats.total_backups }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="fas fa-hdd me-1"></i>总容量
+                    </h6>
+                    <h3 class="card-title mb-0">{{ stats.total_size_formatted }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="fas fa-clock me-1"></i>最新备份
+                    </h6>
+                    <p class="card-text mb-0 small">
+                        {% if stats.newest_backup %}
+                            {{ stats.newest_backup.created_formatted }}
+                        {% else %}
+                            无备份
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="fas fa-history me-1"></i>最旧备份
+                    </h6>
+                    <p class="card-text mb-0 small">
+                        {% if stats.oldest_backup %}
+                            {{ stats.oldest_backup.created_formatted }}
+                        {% else %}
+                            无备份
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Create Backup Button -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createBackupModal">
+                <i class="fas fa-plus-circle me-1"></i>创建新备份
+            </button>
+        </div>
+    </div>
+
+    <!-- Backups Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>备份列表
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if backups %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="25%">备份名称</th>
+                                    <th width="15%">类型</th>
+                                    <th width="15%">大小</th>
+                                    <th width="20%">创建时间</th>
+                                    <th width="15%">文件数</th>
+                                    <th width="10%">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for backup in backups %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-file-archive text-primary me-1"></i>
+                                        <strong>{{ backup.name }}</strong>
+                                        {% if backup.description %}
+                                        <br><small class="text-muted">{{ backup.description }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if backup.type == 'full' %}
+                                        <span class="badge bg-success">完整备份</span>
+                                        {% elif backup.type == 'incremental' %}
+                                        <span class="badge bg-info">增量备份</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ backup.type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ backup.size_formatted }}</td>
+                                    <td>{{ backup.created_formatted }}</td>
+                                    <td>{{ backup.file_count }} 个文件</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button"
+                                                    class="btn btn-outline-success"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#restoreBackupModal"
+                                                    data-backup-name="{{ backup.name }}"
+                                                    title="恢复">
+                                                <i class="fas fa-redo"></i>
+                                            </button>
+                                            <a href="{{ url_for('admin.download_backup', backup_name=backup.name) }}"
+                                               class="btn btn-outline-primary"
+                                               title="下载">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                            <button type="button"
+                                                    class="btn btn-outline-danger"
+                                                    onclick="deleteBackup('{{ backup.name }}')"
+                                                    title="删除">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        暂无备份文件。点击"创建新备份"按钮创建第一个备份。
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Information -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle me-2"></i>备份说明
+                    </h6>
+                    <ul class="mb-0">
+                        <li><strong>完整备份</strong>: 包含数据库、配置文件和上传文件的完整备份</li>
+                        <li><strong>自动备份</strong>: 系统每天凌晨2点自动创建备份</li>
+                        <li><strong>备份保留</strong>: 最多保留30个备份,超过90天的备份将自动删除</li>
+                        <li><strong>恢复注意</strong>: 恢复备份前会自动创建安全备份,以防恢复失败</li>
+                        <li><strong>下载备份</strong>: 可以下载备份文件到本地保存</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Backup Modal -->
+<div class="modal fade" id="createBackupModal" tabindex="-1" aria-labelledby="createBackupModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="createBackupModalLabel">
+                    <i class="fas fa-plus-circle me-2"></i>创建新备份
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="createBackupForm" method="POST" action="{{ url_for('admin.create_backup') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="backup_type" class="form-label">备份类型</label>
+                        <select class="form-select" id="backup_type" name="backup_type" required>
+                            <option value="full" selected>完整备份</option>
+                            <option value="incremental">增量备份</option>
+                        </select>
+                        <div class="form-text">推荐使用完整备份以确保数据完整性</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">备份说明(可选)</label>
+                        <input type="text" class="form-control" id="description" name="description"
+                               placeholder="例如: 上线前备份">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check me-1"></i>创建备份
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Backup Modal -->
+<div class="modal fade" id="restoreBackupModal" tabindex="-1" aria-labelledby="restoreBackupModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="restoreBackupModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>恢复备份
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="restoreBackupForm" method="POST" action="{{ url_for('admin.restore_backup') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="restore_backup_name" name="backup_name" value="">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>警告:</strong> 恢复备份将覆盖当前数据!系统会自动创建安全备份。
+                    </div>
+
+                    <h6>选择要恢复的内容:</h6>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="true"
+                               id="restore_database" name="restore_database" checked>
+                        <label class="form-check-label" for="restore_database">
+                            <strong>数据库</strong> - 包含所有业务数据
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="true"
+                               id="restore_config" name="restore_config">
+                        <label class="form-check-label" for="restore_config">
+                            <strong>配置文件</strong> - 系统配置和设置
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="true"
+                               id="restore_uploads" name="restore_uploads">
+                        <label class="form-check-label" for="restore_uploads">
+                            <strong>上传文件</strong> - 用户上传的文件
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-redo me-1"></i>确认恢复
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Handle create backup form submission
+document.getElementById('createBackupForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>创建中...';
+
+    fetch('{{ url_for("admin.create_backup") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('备份创建成功: ' + data.backup.name);
+            location.reload();
+        } else {
+            alert('备份创建失败: ' + data.error);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        alert('备份创建失败: ' + error);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+});
+
+// Handle restore backup modal
+document.getElementById('restoreBackupModal').addEventListener('show.bs.modal', function(event) {
+    const button = event.relatedTarget;
+    const backupName = button.getAttribute('data-backup-name');
+    document.getElementById('restore_backup_name').value = backupName;
+});
+
+// Handle restore backup form submission
+document.getElementById('restoreBackupForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    if (!confirm('确定要恢复此备份吗?当前数据将被覆盖!')) {
+        return;
+    }
+
+    const formData = new FormData(this);
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>恢复中...';
+
+    fetch('{{ url_for("admin.restore_backup") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('备份恢复成功! 页面将刷新。');
+            location.reload();
+        } else {
+            alert('备份恢复失败: ' + data.error);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        alert('备份恢复失败: ' + error);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+});
+
+// Handle delete backup
+function deleteBackup(backupName) {
+    if (!confirm('确定要删除备份 "' + backupName + '" 吗?此操作不可恢复!')) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('backup_name', backupName);
+    formData.append('csrf_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+
+    fetch('{{ url_for("admin.delete_backup") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('备份已删除');
+            location.reload();
+        } else {
+            alert('删除失败: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('删除失败: ' + error);
+    });
+}
+</script>
+{% endblock %}

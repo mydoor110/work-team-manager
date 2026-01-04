@@ -1,0 +1,65 @@
+{#
+    日期筛选器可复用组件
+
+    使用说明：
+    {% include 'components/date_filter.html'
+       with start_date_value=start_date,
+            end_date_value=end_date,
+            show_quick_buttons=true,
+            show_range_label=true %}
+
+    参数：
+    - start_date_id: 开始日期输入框ID（默认'startDate'）
+    - end_date_id: 结束日期输入框ID（默认'endDate'）
+    - start_date_value: 开始日期初始值
+    - end_date_value: 结束日期初始值
+    - col_class: Bootstrap列宽类（默认'col-md-2'）
+    - show_labels: 是否显示标签（默认true）
+    - show_quick_buttons: 是否显示快捷按钮容器（默认true）
+    - show_range_label: 是否显示日期范围标签（默认true）
+#}
+
+{% set start_id = start_date_id|default('startDate') %}
+{% set end_id = end_date_id|default('endDate') %}
+{% set col = col_class|default('col-md-2') %}
+{% set labels = show_labels|default(true) %}
+{% set quick_buttons = show_quick_buttons|default(true) %}
+{% set range_label = show_range_label|default(true) %}
+
+{# 开始日期 #}
+<div class="{{ col }}">
+    {% if labels %}
+    <label for="{{ start_id }}" class="form-label">开始日期</label>
+    {% endif %}
+    <input type="date"
+           id="{{ start_id }}"
+           name="start_date"
+           class="form-control form-control-sm"
+           value="{{ start_date_value }}">
+</div>
+
+{# 结束日期 #}
+<div class="{{ col }}">
+    {% if labels %}
+    <label for="{{ end_id }}" class="form-label">结束日期</label>
+    {% endif %}
+    <input type="date"
+           id="{{ end_id }}"
+           name="end_date"
+           class="form-control form-control-sm"
+           value="{{ end_date_value }}">
+</div>
+
+{# 日期范围标签 #}
+{% if range_label %}
+<div class="{{ col }} align-self-end">
+    <span id="dateRangeLabel" class="badge bg-primary">-</span>
+</div>
+{% endif %}
+
+{# 快捷按钮容器（由JavaScript动态填充） #}
+{% if quick_buttons %}
+<div id="quickButtonsContainer" class="{{ col }} align-self-end">
+    {# 快捷按钮由date-filter.js动态插入 #}
+</div>
+{% endif %}

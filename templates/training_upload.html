@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">上传培训数据</h5>
+    <small class="text-muted">选择要上传的培训数据类型</small>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('training.index') }}" class="btn btn-outline-secondary btn-sm">返回工作台</a>
+  </div>
+</div>
+
+<!-- 上传类型选择 -->
+<div class="row g-4">
+  <!-- 培训日报上传 -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100 border-primary">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">
+          <i class="fas fa-file-excel"></i> 培训日报导入
+        </h6>
+      </div>
+      <div class="card-body">
+        <h6>功能说明</h6>
+        <ul>
+          <li>支持批量上传 .xls 格式的培训日报文件</li>
+          <li>自动提取班组、培训日期信息</li>
+          <li>自动判断是否合格（失格类）</li>
+          <li>自动识别失格补做记录并关联</li>
+        </ul>
+
+        <h6 class="mt-3">适用场景</h6>
+        <p class="text-muted mb-3">
+          日常培训记录的批量导入，包含实操培训、案例分析等培训内容。
+        </p>
+
+        <a href="{{ url_for('training.upload_daily_report') }}" class="btn btn-primary w-100">
+          <i class="fas fa-upload"></i> 开始上传培训日报
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽检抽问上传 (预留) -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100 border-secondary">
+      <div class="card-header bg-secondary text-white">
+        <h6 class="mb-0">
+          <i class="fas fa-clipboard-check"></i> 抽检抽问导入
+        </h6>
+      </div>
+      <div class="card-body">
+        <h6>功能说明</h6>
+        <ul>
+          <li>支持抽检抽问数据的导入</li>
+          <li>支持多种抽检类型</li>
+          <li>自动统计抽检结果</li>
+          <li>生成抽检分析报告</li>
+        </ul>
+
+        <h6 class="mt-3">适用场景</h6>
+        <p class="text-muted mb-3">
+          定期抽检、随机抽问等质量检查数据的导入和分析。
+        </p>
+
+        <button class="btn btn-secondary w-100" disabled>
+          <i class="fas fa-lock"></i> 功能开发中
+        </button>
+        <small class="text-muted d-block mt-2 text-center">
+          该功能将在后续版本中开放
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 使用提示 -->
+<div class="card shadow-sm mt-4">
+  <div class="card-header bg-light">
+    <h6 class="mb-0"><i class="fas fa-lightbulb"></i> 使用提示</h6>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4">
+        <h6><i class="fas fa-check-circle text-success"></i> 导入前准备</h6>
+        <ul class="small">
+          <li>确保文件格式正确</li>
+          <li>检查必填字段完整</li>
+          <li>注意日期格式规范</li>
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <h6><i class="fas fa-sync-alt text-primary"></i> 数据更新规则</h6>
+        <ul class="small">
+          <li>相同工号+日期+项目会更新</li>
+          <li>自动去重和覆盖</li>
+          <li>保留最新上传数据</li>
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <h6><i class="fas fa-database text-info"></i> 数据查看</h6>
+        <ul class="small">
+          <li>导入后可在"培训记录"查看</li>
+          <li>支持多种筛选和导出</li>
+          <li>提供数据统计分析</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

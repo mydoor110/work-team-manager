@@ -1,0 +1,65 @@
+{#
+  月份筛选器组件
+
+  参数说明：
+  - start_date_id: 开始月份输入框ID（默认'startDate'）
+  - end_date_id: 结束月份输入框ID（默认'endDate'）
+  - col_class: 列宽样式类（默认'col-md-2'）
+  - start_date_value: 开始月份初始值（格式：YYYY-MM）
+  - end_date_value: 结束月份初始值（格式：YYYY-MM）
+  - show_quick_buttons: 是否显示快捷按钮（默认true）
+  - show_range_label: 是否显示日期范围标签（默认false）
+  - labels: 是否显示标签（默认true）
+
+  使用示例：
+    {% set start_date_id = 'startMonth' %}
+    {% set end_date_id = 'endMonth' %}
+    {% set col_class = 'col-md-3' %}
+    {% set start_date_value = start_month %}
+    {% set end_date_value = end_month %}
+    {% set show_quick_buttons = true %}
+    {% set show_range_label = true %}
+    {% include 'components/month_filter.html' %}
+#}
+
+{% set start_id = start_date_id|default('startDate') %}
+{% set end_id = end_date_id|default('endDate') %}
+{% set col = col_class|default('col-md-2') %}
+{% set show_labels = labels if labels is defined else true %}
+
+<div class="{{ col }}">
+  {% if show_labels %}
+  <label for="{{ start_id }}" class="form-label">开始月份</label>
+  {% endif %}
+  <input type="month" id="{{ start_id }}" name="start_date"
+         class="form-control form-control-sm" value="{{ start_date_value }}">
+</div>
+
+<div class="{{ col }}">
+  {% if show_labels %}
+  <label for="{{ end_id }}" class="form-label">结束月份</label>
+  {% endif %}
+  <input type="month" id="{{ end_id }}" name="end_date"
+         class="form-control form-control-sm" value="{{ end_date_value }}">
+</div>
+
+{% if show_quick_buttons %}
+<div class="{{ col }}">
+  {% if show_labels %}
+  <label class="form-label">&nbsp;</label>
+  {% endif %}
+  <div id="quickButtonsContainer"></div>
+</div>
+{% endif %}
+
+{% if show_range_label %}
+<div class="{{ col }}">
+  {% if show_labels %}
+  <label class="form-label">&nbsp;</label>
+  {% endif %}
+  <div class="text-muted small mt-2">
+    <i class="bi bi-calendar-range"></i>
+    <span id="dateRangeLabel">-</span>
+  </div>
+</div>
+{% endif %}

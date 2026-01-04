@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>培训项目管理</h2>
+    <div>
+        <a href="{{ url_for('training.index') }}" class="btn btn-secondary">返回</a>
+        <a href="{{ url_for('training.project_categories') }}" class="btn btn-info">
+            <i class="bi bi-folder"></i> 分类管理
+        </a>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#batchAddModal">
+            <i class="bi bi-file-earmark-spreadsheet"></i> 批量添加
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProjectModal">
+            <i class="bi bi-plus-circle"></i> 添加项目
+        </button>
+        <button class="btn btn-danger" id="batchDeleteBtn" onclick="batchDeleteProjects()" style="display:none;">
+            <i class="bi bi-trash"></i> 批量删除
+        </button>
+    </div>
+</div>
+
+<!-- 筛选器 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">项目分类</label>
+                <select name="category_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">全部分类</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if request.args.get('category_id') == cat.id|string %}selected{% endif %}>
+                        {{ cat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">状态</label>
+                <select name="is_active" class="form-select" onchange="this.form.submit()">
+                    <option value="">全部</option>
+                    <option value="1" {% if request.args.get('is_active') == '1' %}selected{% endif %}>启用</option>
+                    <option value="0" {% if request.args.get('is_active') == '0' %}selected{% endif %}>停用</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">搜索</label>
+                <input type="text" name="search" class="form-control" placeholder="项目名称"
+                       value="{{ request.args.get('search', '') }}">
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if projects %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
+                        </th>
+                        <th>项目名称</th>
+                        <th>所属分类</th>
+                        <th>描述</th>
+                        <th>记录数量</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for proj in projects %}
+                    <tr class="{% if not proj.is_active %}table-secondary{% endif %}">
+                        <td>
+                            {% if proj.record_count == 0 %}
+                            <input type="checkbox" class="form-check-input project-checkbox"
+                                   value="{{ proj.id }}"
+                                   data-name="{{ proj.name }}"
+                                   onchange="updateBatchDeleteBtn()">
+                            {% else %}
+                            <span class="text-muted" title="有关联记录,无法删除">
+                                <i class="bi bi-lock"></i>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ proj.name }}</strong></td>
+                        <td><span class="badge bg-primary">{{ proj.category_name }}</span></td>
+                        <td>{{ proj.description or '-' }}</td>
+                        <td>
+                            {% if proj.record_count > 0 %}
+                            <span class="badge bg-info">{{ proj.record_count }} 条记录</span>
+                            {% else %}
+                            <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if proj.is_active %}
+                            <span class="badge bg-success">启用</span>
+                            {% else %}
+                            <span class="badge bg-secondary">停用</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ proj.created_at[:10] }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    onclick="editProject({{ proj.id }}, '{{ proj.name }}', {{ proj.category_id }}, '{{ proj.description or '' }}', {{ proj.is_active }})">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3 text-muted">
+            共 {{ projects|length }} 个项目
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> 没有找到项目，点击右上角"添加项目"按钮创建。
+</div>
+{% endif %}
+
+<!-- 添加项目模态框 -->
+<div class="modal fade" id="addProjectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('training.add_project') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">添加培训项目</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">项目名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">所属分类 <span class="text-danger">*</span></label>
+                        <select name="category_id" class="form-select" required>
+                            <option value="">请选择</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="add_is_active" value="1" checked>
+                            <label class="form-check-label" for="add_is_active">
+                                启用此项目
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑项目模态框 -->
+<div class="modal fade" id="editProjectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('training.edit_project') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="project_id" id="edit_project_id">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑培训项目</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">项目名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" id="edit_name" required maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">所属分类 <span class="text-danger">*</span></label>
+                        <select name="category_id" class="form-select" id="edit_category_id" required>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" id="edit_description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="edit_is_active" value="1">
+                            <label class="form-check-label" for="edit_is_active">
+                                启用此项目
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 批量添加模态框 -->
+<div class="modal fade" id="batchAddModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('training.batch_add_projects') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">批量添加培训项目</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>使用说明：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>从Excel复制两列数据：第一列是<strong>分类</strong>，第二列是<strong>项目名称</strong></li>
+                            <li>粘贴到下方文本框，每行一个项目，列之间用制表符(Tab)分隔</li>
+                            <li>如果分类为空，项目会被创建但需要手动选择分类</li>
+                            <li>如果分类不存在，系统会自动创建该分类</li>
+                            <li>支持的格式：<code>分类名称&nbsp;&nbsp;&nbsp;&nbsp;项目名称</code> 或 <code>项目名称</code></li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">
+                            粘贴数据 <span class="text-danger">*</span>
+                            <small class="text-muted">(示例: "理论培训	安全规程" 或 "安全规程")</small>
+                        </label>
+                        <textarea class="form-control font-monospace"
+                                  name="batch_data"
+                                  id="batch_data"
+                                  rows="10"
+                                  required
+                                  placeholder="理论培训	安全规程&#10;实操培训	设备操作&#10;技能培训	故障排查"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">默认分类（可选）</label>
+                        <select name="default_category_id" class="form-select">
+                            <option value="">不指定（使用数据中的分类或留空）</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            如果粘贴的数据中没有分类信息，将使用此默认分类
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="batch_is_active" value="1" checked>
+                            <label class="form-check-label" for="batch_is_active">
+                                启用添加的项目
+                            </label>
+                        </div>
+                    </div>
+                    <div id="previewSection" style="display:none;">
+                        <h6>数据预览：</h6>
+                        <div id="previewContent" class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-info" onclick="previewBatchData()">预览</button>
+                    <button type="submit" class="btn btn-primary">批量添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editProject(id, name, categoryId, description, isActive) {
+    document.getElementById('edit_project_id').value = id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_category_id').value = categoryId;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_is_active').checked = isActive === 1;
+
+    const modal = new bootstrap.Modal(document.getElementById('editProjectModal'));
+    modal.show();
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.project-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateBatchDeleteBtn();
+}
+
+// 更新批量删除按钮显示状态
+function updateBatchDeleteBtn() {
+    const checkboxes = document.querySelectorAll('.project-checkbox:checked');
+    const btn = document.getElementById('batchDeleteBtn');
+    if (checkboxes.length > 0) {
+        btn.style.display = 'inline-block';
+        btn.textContent = `批量删除 (${checkboxes.length})`;
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+// 批量删除项目
+function batchDeleteProjects() {
+    const checkboxes = document.querySelectorAll('.project-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请先选择要删除的项目');
+        return;
+    }
+
+    const projectNames = Array.from(checkboxes).map(cb => cb.dataset.name).join('、');
+    if (!confirm(`确定要删除以下 ${checkboxes.length} 个项目吗？\n\n${projectNames}\n\n此操作不可撤销。`)) {
+        return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("training.batch_delete_projects") }}';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+
+    checkboxes.forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'project_ids';
+        input.value = cb.value;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// 预览批量添加数据
+function previewBatchData() {
+    const data = document.getElementById('batch_data').value.trim();
+    if (!data) {
+        alert('请先粘贴数据');
+        return;
+    }
+
+    const lines = data.split('\n').filter(line => line.trim());
+    const previewContent = document.getElementById('previewContent');
+    const previewSection = document.getElementById('previewSection');
+
+    let html = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>序号</th><th>分类</th><th>项目名称</th></tr></thead><tbody>';
+
+    lines.forEach((line, index) => {
+        const parts = line.split('\t').map(p => p.trim());
+        let category = '';
+        let projectName = '';
+
+        if (parts.length >= 2) {
+            // 两列数据：分类 + 项目名称
+            category = parts[0] || '<span class="text-muted">（空）</span>';
+            projectName = parts[1];
+        } else if (parts.length === 1) {
+            // 只有一列：项目名称
+            category = '<span class="text-muted">（使用默认分类）</span>';
+            projectName = parts[0];
+        }
+
+        html += `<tr>
+            <td>${index + 1}</td>
+            <td>${category}</td>
+            <td>${projectName}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    previewContent.innerHTML = html;
+    previewSection.style.display = 'block';
+}
+</script>
+{% endblock %}

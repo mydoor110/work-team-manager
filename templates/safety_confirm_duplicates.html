@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="mb-2">确认重名人员工号</h1>
+  <p class="text-muted">
+    检测到文件 <strong>{{ filename }}</strong> 中有重名人员，共 {{ record_count }} 条记录待导入。
+    请为每个重名人员选择正确的工号，或取消导入。
+  </p>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-warning text-dark">
+    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>发现重名人员</h5>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>提示：</strong>系统在人员档案中发现以下重名人员，请根据部门信息选择正确的工号。如果不确定，建议先取消导入，核实后再操作。
+    </div>
+
+    <form method="POST" action="{{ url_for('safety.confirm_duplicates') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% for person_name, employees in duplicate_names.items() %}
+      <div class="mb-4 p-3 border rounded bg-light">
+        <h6 class="text-primary mb-3">
+          <i class="bi bi-person-fill me-2"></i>姓名：{{ person_name }}
+          <span class="badge bg-warning ms-2">发现 {{ employees|length }} 个重名</span>
+        </h6>
+
+        <div class="row g-2">
+          {% for emp in employees %}
+          <div class="col-md-6">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="emp_no_{{ person_name }}"
+                id="emp_{{ person_name }}_{{ emp.emp_no }}"
+                value="{{ emp.emp_no }}"
+                {% if loop.first %}checked{% endif %}
+                required
+              >
+              <label class="form-check-label w-100" for="emp_{{ person_name }}_{{ emp.emp_no }}">
+                <div class="border rounded p-2 bg-white">
+                  <div><strong>工号：</strong>{{ emp.emp_no }}</div>
+                  <div class="text-muted small">
+                    <i class="bi bi-building me-1"></i>{{ emp.dept_name }}
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <div class="alert alert-warning mt-4">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>重要提示：</strong>
+        <ul class="mb-0 mt-2">
+          <li>选择工号后，系统将按选择的工号导入数据</li>
+          <li>如果选择错误的工号，可能导致数据关联到错误的人员</li>
+          <li>建议在导入前核实人员信息，确保数据准确性</li>
+        </ul>
+      </div>
+
+      <div class="d-flex gap-3 mt-4">
+        <button type="submit" name="action" value="confirm" class="btn btn-primary">
+          <i class="bi bi-check-circle me-2"></i>确认并导入
+        </button>
+        <button type="submit" name="action" value="cancel" class="btn btn-outline-secondary">
+          <i class="bi bi-x-circle me-2"></i>取消导入
+        </button>
+        <a href="{{ url_for('safety.upload_inspection') }}" class="btn btn-outline-info">
+          <i class="bi bi-arrow-left me-2"></i>返回上传页面
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm mt-4">
+  <div class="card-header">
+    <h6 class="mb-0"><i class="bi bi-lightbulb me-2"></i>如何避免重名问题？</h6>
+  </div>
+  <div class="card-body">
+    <ol class="mb-0">
+      <li><strong>在人员档案中补充信息：</strong>为重名人员添加完整的部门、班组等信息，便于区分</li>
+      <li><strong>使用工号标识：</strong>在Excel文件中直接使用工号而非姓名</li>
+      <li><strong>统一命名规范：</strong>对于重名人员，可以在姓名后加上工号或部门标识</li>
+      <li><strong>定期核查：</strong>定期核查人员档案，确保信息完整准确</li>
+    </ol>
+  </div>
+</div>
+{% endblock %}

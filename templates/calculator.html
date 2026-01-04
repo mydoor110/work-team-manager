@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header-card card border-0 shadow-sm mb-4">
+  <div class="card-body d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+    <div>
+      <h5 class="mb-1">绩效计算器（{{ year }} 年）</h5>
+      <div class="text-muted small">按月度等级计算积分，支持自定义等级权重并导出 Excel。</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+      <form class="row gy-2 gx-2 align-items-end" method="get" action="{{ url_for('performance.calculator') }}">
+        <div class="col-auto">
+          <label class="form-label form-label-sm">年份</label>
+          <select class="form-select form-select-sm" name="year">
+            {% for y in year_options %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-primary btn-sm" type="submit">切换年份</button>
+        </div>
+      </form>
+      <a class="btn btn-soft-primary btn-sm" href="{{ url_for('performance.export_calculator', year=year, sort=sort) }}">导出 Excel</a>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <form class="row gy-2 gx-3 align-items-end" method="post">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-auto"><label class="form-label">A</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_A" value="{{ mapping['A'] }}"></div>
+      <div class="col-auto"><label class="form-label">B+</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_Bp" value="{{ mapping['B+'] }}"></div>
+      <div class="col-auto"><label class="form-label">B</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_B" value="{{ mapping['B'] }}"></div>
+      <div class="col-auto"><label class="form-label">C</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_C" value="{{ mapping['C'] }}"></div>
+      <div class="col-auto"><label class="form-label">D</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_D" value="{{ mapping['D'] }}"></div>
+      <div class="col-auto"><label class="form-label">不进行</label><input class="form-control form-control-sm" type="number" step="0.01" name="score_none" value="{{ mapping['不进行'] }}"></div>
+      <div class="col-auto d-flex align-items-end gap-2">
+        <button class="btn btn-primary btn-sm" type="submit">保存分值</button>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('performance.calculator', sort=sort, year=year) }}">重置视图</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div class="fw-semibold">年度积分明细</div>
+      <div class="btn-group btn-group-sm" role="group">
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='total_desc' else '' }}" href="{{ url_for('performance.calculator', sort='total_desc', year=year) }}">按总积分↓</a>
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='total_asc' else '' }}" href="{{ url_for('performance.calculator', sort='total_asc', year=year) }}">按总积分↑</a>
+        <a class="btn btn-outline-secondary {{ 'active' if sort=='emp' else '' }}" href="{{ url_for('performance.calculator', sort='emp', year=year) }}">按工号</a>
+      </div>
+    </div>
+    <div class="table-responsive table-sticky-head table-sticky-first">
+      <table class="table table-modern table-striped table-sm align-middle">
+        <thead>
+          <tr>
+            <th class="sticky-col">人员</th>
+            {% for _y,m in months %}
+            <th colspan="2" class="text-center">{{ m }}月</th>
+            {% endfor %}
+            <th class="text-end">总积分</th>
+          </tr>
+          <tr>
+            <th class="sticky-col"></th>
+            {% for _y,m in months %}
+            <th class="text-center text-muted">等</th>
+            <th class="text-end text-muted">分</th>
+            {% endfor %}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data %}
+          <tr>
+            <td class="sticky-col person-cell">
+              <div class="person-name">{{ r.name }}</div>
+              <div class="person-meta">工号：{{ r.emp_no }}</div>
+            </td>
+            {% for cell in r.detail %}
+            <td class="text-center">{{ cell.grade if cell else '' }}</td>
+            <td class="text-end">{{ "%.2f"|format(cell.value) if cell else '' }}</td>
+            {% endfor %}
+            <td class="text-end fw-semibold">{{ "%.2f"|format(r.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if not data %}
+    <div class="alert alert-warning mb-0 mt-3">未找到积分数据。</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">区间统计（分数 + 等级，可跨年）</h5>
+      <div class="text-muted small">只计算“区间平均分”（等级不参与平均）</div>
+    </div>
+    <form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('performance.range_view') }}">
+      {% set start_date_id = 'startDate' %}
+      {% set end_date_id = 'endDate' %}
+      {% set col_class = 'col-auto' %}
+      {% set start_date_value = start_date %}
+      {% set end_date_value = end_date %}
+      {% set show_quick_buttons = true %}
+      {% set show_range_label = false %}
+      {% include 'components/month_filter.html' %}
+      <div class="col-auto">
+        <button class="btn btn-sm btn-primary" type="submit">统计</button>
+        {% if months %}
+        <a class="btn btn-sm btn-success ms-2" href="{{ url_for('performance.export_range', start_date=start_date, end_date=end_date) }}">导出Excel</a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if months %}
+    <div class="alert alert-secondary py-2">
+      <strong>区间：</strong>{{ months[0][0] }}年{{ months[0][1] }}月 → {{ months[-1][0] }}年{{ months[-1][1] }}月
+    </div>
+
+    <div class="table-responsive table-sticky-head">
+      <table class="table table-sm table-striped align-middle">
+        <thead class="table-light">
+          <tr>
+            <th rowspan="2">工号</th>
+            <th rowspan="2">姓名</th>
+            {% for y,m in months %}
+              <th colspan="2" class="text-center">{{ y }}-{{ "%02d"|format(m) }}</th>
+            {% endfor %}
+            <th rowspan="2">平均分</th>
+          </tr>
+          <tr>
+            {% for y,m in months %}
+              <th class="text-center">分</th>
+              <th class="text-center">等</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in data %}
+          <tr>
+            <td>{{ r.emp_no }}</td>
+            <td>{{ r.name }}</td>
+            {% for item in r.detail %}
+              <td class="text-end">{{ item.score if item else "" }}</td>
+              <td class="text-center">{{ item.grade if item else "" }}</td>
+            {% endfor %}
+            <td class="text-end">{{ r.avg_score or "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info mb-0">请选择起止年月后统计（可跨年）。</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- 引入日期筛选器库 -->
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+// 初始化月份筛选器
+document.addEventListener('DOMContentLoaded', function() {
+  new DateFilterHelper({
+    startDateId: 'startDate',
+    endDateId: 'endDate',
+    defaultRange: 'current_month',
+    showQuickButtons: true,
+    validateDates: true
+  });
+});
+</script>
+{% endblock %}

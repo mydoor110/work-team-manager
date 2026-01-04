@@ -1,0 +1,78 @@
+# 班组管理系统 - 生产环境 .gitignore
+
+# ==================== Python ====================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==================== 数据库文件 ====================
+# SQLite数据库（不上传到GitHub）
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# 数据库备份
+*.db.backup*
+backups/
+
+# ==================== 日志文件 ====================
+logs/
+*.log
+
+# ==================== 上传和导出文件 ====================
+uploads/
+exports/
+temp/
+
+# ==================== 环境配置 ====================
+# 虚拟环境
+venv/
+.venv/
+env/
+ENV/
+
+# 环境变量文件（敏感信息）
+.env
+.env.local
+.env.*.local
+
+# ==================== IDE配置 ====================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ==================== 测试和覆盖率 ====================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ==================== 其他 ====================
+# 同步历史记录（可选，如果不想上传）
+# SYNC_HISTORY.md
+
+# Flask缓存
+instance/
+.webassets-cache
+
+# 发行版
+dist/
+build/
+*.egg-info/
+算法配置优化部署说明.md
+GitHub上传指南.md
+migrate_add_import_logs.py
+migrate_add_learning_config.py
+sync_from_dev.sh

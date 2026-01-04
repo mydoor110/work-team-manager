@@ -1,0 +1,907 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .capability-container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+
+    .student-list-panel {
+        width: 30%;
+        min-width: 280px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .panel-header {
+        padding: 15px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #ddd;
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+
+    .student-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .student-item {
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    .student-item:hover {
+        background: #f0f8ff;
+        border-color: #007bff;
+        transform: translateX(5px);
+    }
+
+    .student-item.active {
+        background: #007bff;
+        color: white;
+        border-color: #0056b3;
+    }
+
+    /* 关键人员标红 */
+    .student-item.key-personnel {
+        border-left: 4px solid #dc3545;
+        background: #fff5f5;
+    }
+
+    .student-item.key-personnel.active {
+        background: #dc3545;
+        border-color: #bd2130;
+    }
+
+    .student-item.active .student-score {
+        color: #ffeb3b;
+    }
+
+    .student-name {
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+
+    /* 关键人员名字标红 */
+    .student-item.key-personnel .student-name {
+        color: #dc3545;
+    }
+
+    .student-item.key-personnel.active .student-name {
+        color: #fff;
+    }
+
+    .student-meta {
+        font-size: 0.85em;
+        color: #666;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .student-item.active .student-meta {
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .student-score {
+        font-weight: bold;
+        color: #007bff;
+    }
+
+    .charts-panel {
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .chart-container {
+        flex: 1;
+        min-height: 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .chart-title {
+        font-weight: 600;
+        font-size: 1.1em;
+        margin-bottom: 15px;
+        color: #333;
+        text-align: center;
+    }
+
+    .chart-canvas-wrapper {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 20px;
+        color: #999;
+    }
+
+    .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+        font-size: 1.1em;
+    }
+
+    /* 响应式 */
+    @media (max-width: 1024px) {
+        .capability-container {
+            flex-direction: column;
+            height: auto;
+        }
+
+        .student-list-panel {
+            width: 100%;
+            max-height: 400px;
+        }
+
+        .charts-panel {
+            min-height: 800px;
+        }
+    }
+
+    /* 关键人员图例 */
+    .key-personnel-legend {
+        padding: 10px 15px;
+        background: #fff5f5;
+        border: 1px solid #ffcdd2;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        font-size: 0.85em;
+    }
+
+    .key-personnel-legend .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .key-personnel-legend .legend-marker {
+        width: 16px;
+        height: 16px;
+        background: #dc3545;
+        border-radius: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2>个人综合能力画像 <span id="pageDateRange" class="badge bg-primary" style="font-size: 0.5em; vertical-align: middle;"></span></h2>
+            <p class="text-muted mb-0">整合人员、培训、安全、绩效数据的五维能力评估（按权限分级）</p>
+        </div>
+        <a href="{{ url_for('personnel.dashboard') }}" class="btn btn-secondary">返回</a>
+    </div>
+
+    <div class="capability-container">
+        <!-- 左侧：学员列表 + 筛选器 -->
+        <div class="student-list-panel">
+            <div class="panel-header">
+                人员列表 (按综合分升序)
+            </div>
+
+            <!-- 筛选器区域 -->
+            <div style="padding: 15px; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                <div class="mb-3">
+                    <label class="form-label" style="font-size: 0.85em; font-weight: 600;">日期范围</label>
+                    <div class="row g-2">
+                        {% set start_date_id = 'filterStartDate' %}
+                        {% set end_date_id = 'filterEndDate' %}
+                        {% set col_class = 'col-6' %}
+                        {% set labels = false %}
+                        {% set show_quick_buttons = true %}
+                        {% include 'components/month_filter.html' %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" style="font-size: 0.85em; font-weight: 600;">部门</label>
+                    <select class="form-select form-select-sm" id="filterDepartment">
+                        <option value="">全部部门</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" style="font-size: 0.85em; font-weight: 600;">岗位</label>
+                    <input type="text" class="form-control form-control-sm" id="filterPosition"
+                           placeholder="输入岗位关键词">
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm flex-fill" onclick="applyFilters()">应用筛选</button>
+                    <button class="btn btn-secondary btn-sm flex-fill" onclick="resetFilters()">重置</button>
+                </div>
+            </div>
+
+            <!-- 关键人员图例 -->
+            <div class="key-personnel-legend">
+                <div class="legend-item">
+                    <span class="legend-marker"></span>
+                    <span id="keyPersonnelLegend">加载中...</span>
+                </div>
+            </div>
+
+            <div class="student-list" id="studentList">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 右侧：图表区域 -->
+        <div class="charts-panel">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding-top: 15px;">
+                    <!-- 综合分数卡片 -->
+                    <div class="row g-3" id="scoreCards">
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">综合评分</h6>
+                                    <h3 class="mb-0" id="scoreComprehensive">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">培训能力</h6>
+                                    <h3 class="mb-0 text-primary" id="scoreTraining">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">安全意识</h6>
+                                    <h3 class="mb-0 text-success" id="scoreSafety">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">工作绩效</h6>
+                                    <h3 class="mb-0 text-warning" id="scorePerformance">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">学习能力</h6>
+                                    <h3 class="mb-0 text-info" id="scoreLearning">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-muted mb-1" style="font-size: 0.9em;">稳定性</h6>
+                                    <h3 class="mb-0 text-secondary" id="scoreStability">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 五维能力雷达图 -->
+                    <div class="chart-container" style="flex: 1;">
+                        <div class="chart-title">五维能力雷达图</div>
+                        <div class="chart-canvas-wrapper">
+                            <canvas id="comprehensiveRadar"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 四个模块的统计数据 -->
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <strong>人员信息</strong>
+                                </div>
+                                <div class="card-body" id="personnelStats">
+                                    <p class="mb-1"><span class="text-muted">工龄:</span> <span id="personnelWorkingYears">--</span> 年</p>
+                                    <p class="mb-1"><span class="text-muted">司龄:</span> <span id="personnelTenureYears">--</span> 年</p>
+                                    <p class="mb-1"><span class="text-muted">驾驶年限:</span> <span id="personnelDrivingYears">--</span> 年</p>
+                                    <p class="mb-0"><span class="text-muted">学历:</span> <span id="personnelEducation">--</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                    <strong>安全记录</strong>
+                                    <span id="safetyAlertBadge" class="badge bg-success">✅ 安全</span>
+                                </div>
+                                <div class="card-body" id="safetyStats">
+                                    <p class="mb-1"><span class="text-muted">违规次数:</span> <span class="text-danger" id="safetyViolations">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">累计扣分:</span> <span class="text-danger" id="safetyDeduction">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">月均频次:</span> <span id="safetyAvgFreq">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">行为分(A):</span> <span id="safetyScoreA">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">严重分(B):</span> <span id="safetyScoreB">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">发现问题:</span> <span id="safetyInspector">--</span></p>
+                                    <p class="mb-0"><span class="text-muted">整改次数:</span> <span id="safetyRectifier">--</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                    <strong>培训能力</strong>
+                                    <span id="trainingAlertBadge" class="badge bg-success">✅ 能力达标</span>
+                                </div>
+                                <div class="card-body" id="trainingStats">
+                                    <p class="mb-1"><span class="text-muted">雷达分值:</span> <span class="text-primary" id="trainingRadarScore">--</span> 分</p>
+                                    <p class="mb-1"><span class="text-muted">原始基础分:</span> <span id="trainingOriginalScore">--</span> 分</p>
+                                    <p class="mb-1"><span class="text-muted">惩罚系数:</span> <span id="trainingCoefficient">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">操作总数:</span> <span id="totalTrainings">--</span> 次</p>
+                                    <p class="mb-0"><span class="text-muted">失格次数:</span> <span id="trainingFailCount">--</span> 次</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                    <strong>绩效数据</strong>
+                                    <span id="performanceAlertBadge" class="badge bg-success">✅ 达标</span>
+                                </div>
+                                <div class="card-body" id="performanceStats">
+                                    <p class="mb-1"><span class="text-muted">绩效分值:</span> <span class="text-warning" id="recentPerformance">--</span> 分</p>
+                                    <p class="mb-1"><span class="text-muted">等级标签:</span> <span id="performanceLabel">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">统计模式:</span> <span id="performanceMode">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">统计范围:</span> <span id="performanceRange">--</span></p>
+                                    <p class="mb-0"><span class="text-muted">记录数:</span> <span id="performanceCount">--</span> 条</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- 引入 Chart.js 和 Annotation 插件 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+<!-- 引入日期筛选器库 -->
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+    let students = [];
+    let allStudents = [];  // 存储所有学员数据
+    let selectedStudent = null;
+    let comprehensiveRadarChart = null;
+    let departments = [];  // 存储部门列表
+    let keyPersonnelConfig = {  // 关键人员配置（从后端动态加载）
+        comprehensive_threshold: 75,
+        monthly_violation_threshold: 3
+    };
+
+    // 加载关键人员配置
+    async function loadKeyPersonnelConfig() {
+        try {
+            const response = await fetch('/personnel/api/key-personnel-config');
+            const data = await response.json();
+            if (data.success) {
+                keyPersonnelConfig = data.config;
+                console.log('关键人员配置已加载:', keyPersonnelConfig);
+                // 加载配置后更新图例
+                updateKeyPersonnelLegend();
+            }
+        } catch (error) {
+            console.error('加载关键人员配置失败，使用默认值:', error);
+        }
+    }
+
+    // 加载部门列表
+    async function loadDepartments() {
+        try {
+            const response = await fetch('/personnel/api/students-list');
+            if (!response.ok) throw new Error('获取部门失败');
+
+            const studentsList = await response.json();
+            const deptSet = new Set();
+            studentsList.forEach(s => {
+                if (s.department_name) {
+                    deptSet.add(s.department_name);
+                }
+            });
+
+            departments = Array.from(deptSet).sort();
+
+            // 填充部门下拉框
+            const deptSelect = document.getElementById('filterDepartment');
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept;
+                option.textContent = dept;
+                deptSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('加载部门列表失败:', error);
+        }
+    }
+
+    // 加载学员列表
+    // 更新页面日期范围显示
+    function updatePageDateRange() {
+        const startDate = document.getElementById('filterStartDate')?.value;
+        const endDate = document.getElementById('filterEndDate')?.value;
+        const dateRangeEl = document.getElementById('pageDateRange');
+
+        if (!dateRangeEl) return;
+
+        if (startDate || endDate) {
+            const start = startDate || '起始';
+            const end = endDate || '当前';
+            dateRangeEl.textContent = `${start} 至 ${end}`;
+            dateRangeEl.style.display = 'inline-block';
+        } else {
+            dateRangeEl.textContent = '当前月';
+            dateRangeEl.style.display = 'inline-block';
+        }
+
+        // 同时更新关键人员图例
+        updateKeyPersonnelLegend(startDate, endDate);
+    }
+
+    // 更新关键人员图例说明（使用动态配置）
+    function updateKeyPersonnelLegend(startDate, endDate) {
+        const legendEl = document.getElementById('keyPersonnelLegend');
+        if (!legendEl) return;
+
+        const threshold = keyPersonnelConfig.comprehensive_threshold;
+        const violationThreshold = keyPersonnelConfig.monthly_violation_threshold;
+
+        let legendText = `关键人员（综合分<${threshold} 或 月均违规≥${violationThreshold}次）`;
+        legendEl.textContent = legendText;
+    }
+
+    async function loadStudents() {
+        try {
+            console.log('开始加载人员列表...');
+
+            // 构建查询参数
+            const params = new URLSearchParams();
+            const startDate = document.getElementById('filterStartDate')?.value;
+            const endDate = document.getElementById('filterEndDate')?.value;
+            const department = document.getElementById('filterDepartment')?.value;
+            const position = document.getElementById('filterPosition')?.value;
+
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            if (department) params.append('department', department);
+            if (position) params.append('position', position);
+
+            // 更新页面日期范围显示
+            updatePageDateRange();
+
+            const url = `/personnel/api/students-list${params.toString() ? '?' + params.toString() : ''}`;
+            const response = await fetch(url);
+            console.log('API响应状态:', response.status);
+
+            if (!response.ok) {
+                throw new Error('API请求失败: ' + response.status);
+            }
+
+            const data = await response.json();
+            allStudents = data;
+            students = data;
+            console.log('获取到人员数据:', students.length, '人');
+
+            renderStudentList();
+
+            // 自动选择第一个学员
+            if (students.length > 0) {
+                selectStudent(students[0].emp_no);
+            }
+        } catch (error) {
+            console.error('加载人员列表失败:', error);
+            document.getElementById('studentList').innerHTML =
+                '<div class="no-data">加载失败，请刷新重试</div>';
+        }
+    }
+
+    // 应用筛选
+    function applyFilters() {
+        loadStudents();
+    }
+
+    // 重置筛选
+    function resetFilters() {
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        document.getElementById('filterDepartment').value = '';
+        document.getElementById('filterPosition').value = '';
+        loadStudents();
+    }
+
+    // 渲染学员列表
+    function renderStudentList() {
+        const listEl = document.getElementById('studentList');
+
+        if (students.length === 0) {
+            listEl.innerHTML = '<div class="no-data">暂无人员数据</div>';
+            return;
+        }
+
+        listEl.innerHTML = students.map(s => `
+            <div class="student-item ${s.is_key_personnel ? 'key-personnel' : ''}" onclick="selectStudent('${s.emp_no}')" id="student-${s.emp_no}">
+                <div class="student-name">${s.name} (${s.emp_no})</div>
+                <div class="student-meta">
+                    <span>${s.department_name || '未分配部门'}</span>
+                    <span class="student-score">综合: ${s.comprehensive_score} 分</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 选择学员
+    async function selectStudent(empNo) {
+        selectedStudent = empNo;
+
+        // 更新激活状态
+        document.querySelectorAll('.student-item').forEach(el => {
+            el.classList.remove('active');
+        });
+        document.getElementById(`student-${empNo}`)?.classList.add('active');
+
+        // 加载综合能力画像
+        await loadComprehensiveProfile(empNo);
+    }
+
+    // 加载个人综合能力画像（人员+培训+安全+绩效）
+    async function loadComprehensiveProfile(empNo) {
+        try {
+            // 构建查询参数（包含日期筛选）
+            const params = new URLSearchParams();
+            const startDate = document.getElementById('filterStartDate')?.value;
+            const endDate = document.getElementById('filterEndDate')?.value;
+
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+
+            const url = `/personnel/api/comprehensive-profile/${empNo}${params.toString() ? '?' + params.toString() : ''}`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error('API请求失败');
+            }
+
+            const data = await response.json();
+            console.log('综合能力数据:', data);
+
+            // 更新分数卡片
+            document.getElementById('scoreComprehensive').textContent = data.scores.comprehensive;
+            document.getElementById('scoreTraining').textContent = data.scores.training;
+            document.getElementById('scoreSafety').textContent = data.scores.safety;
+            document.getElementById('scorePerformance').textContent = data.scores.performance;
+            document.getElementById('scoreLearning').textContent = data.scores.learning;
+            document.getElementById('scoreStability').textContent = data.scores.stability;
+
+            // 更新人员信息
+            document.getElementById('personnelWorkingYears').textContent =
+                data.personnel_details.working_years ? data.personnel_details.working_years.toFixed(1) : '--';
+            document.getElementById('personnelTenureYears').textContent =
+                data.personnel_details.tenure_years ? data.personnel_details.tenure_years.toFixed(1) : '--';
+            document.getElementById('personnelDrivingYears').textContent =
+                data.personnel_details.solo_driving_years ? data.personnel_details.solo_driving_years.toFixed(1) : '--';
+            document.getElementById('personnelEducation').textContent = data.personnel_details.education || '--';
+
+            // 更新安全统计
+            document.getElementById('safetyViolations').textContent = data.safety_details.violations;
+            document.getElementById('safetyDeduction').textContent = data.safety_details.total_deduction.toFixed(1);
+            document.getElementById('safetyAvgFreq').textContent = data.safety_details.avg_freq;
+            document.getElementById('safetyScoreA').textContent = data.safety_details.score_a;
+            document.getElementById('safetyScoreB').textContent = data.safety_details.score_b;
+            document.getElementById('safetyInspector').textContent = data.safety_details.as_inspector;
+            document.getElementById('safetyRectifier').textContent = data.safety_details.as_rectifier;
+
+            // 更新安全警示标签
+            const alertBadge = document.getElementById('safetyAlertBadge');
+            alertBadge.textContent = data.safety_details.alert_tag;
+
+            // 根据状态颜色设置徽章样式
+            alertBadge.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+            if (data.safety_details.status_color === 'GREEN') {
+                alertBadge.classList.add('bg-success');
+            } else if (data.safety_details.status_color === 'ORANGE') {
+                alertBadge.classList.add('bg-warning');
+            } else if (data.safety_details.status_color === 'RED') {
+                alertBadge.classList.add('bg-danger');
+            }
+
+            // 更新培训统计
+            document.getElementById('trainingRadarScore').textContent = data.training_details.radar_score.toFixed(1);
+            document.getElementById('trainingOriginalScore').textContent = data.training_details.original_score.toFixed(1);
+            document.getElementById('trainingCoefficient').textContent = data.training_details.penalty_coefficient.toFixed(2);
+            document.getElementById('totalTrainings').textContent = data.training_details.total_ops;
+            document.getElementById('trainingFailCount').textContent = data.training_details.fail_count;
+
+            // 更新培训能力警示标签
+            const trainingAlertBadge = document.getElementById('trainingAlertBadge');
+            trainingAlertBadge.textContent = data.training_details.alert_tag;
+
+            // 根据状态颜色设置徽章样式
+            trainingAlertBadge.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-secondary', 'bg-info');
+            if (data.training_details.status_color === 'GREEN') {
+                trainingAlertBadge.classList.add('bg-success');
+            } else if (data.training_details.status_color === 'YELLOW') {
+                trainingAlertBadge.classList.add('bg-warning');
+            } else if (data.training_details.status_color === 'ORANGE') {
+                trainingAlertBadge.classList.add('bg-warning', 'text-dark');
+            } else if (data.training_details.status_color === 'RED') {
+                trainingAlertBadge.classList.add('bg-danger');
+            } else if (data.training_details.status_color === 'PURPLE') {
+                trainingAlertBadge.classList.add('bg-secondary');
+            }
+
+            // 更新绩效统计
+            document.getElementById('recentPerformance').textContent = data.performance_details.recent_avg.toFixed(1);
+            document.getElementById('performanceLabel').textContent = data.performance_details.display_label || '--';
+            document.getElementById('performanceMode').textContent =
+                data.performance_details.mode === 'MONTHLY' ? '月度快照' : '周期加权';
+            document.getElementById('performanceRange').textContent = data.performance_details.range;
+            document.getElementById('performanceCount').textContent = data.performance_details.count;
+
+            // 更新绩效警示标签
+            const perfAlertBadge = document.getElementById('performanceAlertBadge');
+            perfAlertBadge.textContent = data.performance_details.alert_tag;
+
+            // 根据状态颜色设置徽章样式
+            perfAlertBadge.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+            if (data.performance_details.status_color === 'GREEN') {
+                perfAlertBadge.classList.add('bg-success');
+            } else if (data.performance_details.status_color === 'ORANGE') {
+                perfAlertBadge.classList.add('bg-warning');
+            } else if (data.performance_details.status_color === 'RED') {
+                perfAlertBadge.classList.add('bg-danger');
+            }
+
+            // 渲染五维雷达图
+            renderComprehensiveRadar(data.scores, data.training_details.status_color, data.safety_details.status_color, data.performance_details.status_color);
+        } catch (error) {
+            console.error('加载综合画像失败:', error);
+        }
+    }
+
+    // 渲染五维能力雷达图
+    function renderComprehensiveRadar(scores, trainingStatusColor, safetyStatusColor, performanceStatusColor) {
+        const canvas = document.getElementById('comprehensiveRadar');
+
+        if (comprehensiveRadarChart) {
+            comprehensiveRadarChart.destroy();
+        }
+
+        // 保存警示标签，用于tooltip显示
+        const trainingAlertTag = document.getElementById('trainingAlertBadge')?.textContent || '✅ 能力达标';
+        const safetyAlertTag = document.getElementById('safetyAlertBadge')?.textContent || '✅ 安全';
+        const performanceAlertTag = document.getElementById('performanceAlertBadge')?.textContent || '✅ 达标';
+
+        // 根据培训能力状态确定培训能力圆点的颜色
+        let trainingPointColor = 'rgba(40, 167, 69, 1)';  // 默认绿色
+        if (trainingStatusColor === 'RED') {
+            trainingPointColor = 'rgba(220, 53, 69, 1)';  // 红色
+        } else if (trainingStatusColor === 'ORANGE') {
+            trainingPointColor = 'rgba(255, 193, 7, 1)';  // 橙色
+        } else if (trainingStatusColor === 'YELLOW') {
+            trainingPointColor = 'rgba(255, 235, 59, 1)';  // 黄色
+        } else if (trainingStatusColor === 'PURPLE') {
+            trainingPointColor = 'rgba(156, 39, 176, 1)';  // 紫色
+        }
+
+        // 根据安全状态确定安全意识圆点的颜色
+        let safetyPointColor = 'rgba(40, 167, 69, 1)';  // 默认绿色
+        if (safetyStatusColor === 'RED') {
+            safetyPointColor = 'rgba(220, 53, 69, 1)';  // 红色
+        } else if (safetyStatusColor === 'ORANGE') {
+            safetyPointColor = 'rgba(255, 193, 7, 1)';  // 橙色
+        }
+
+        // 根据绩效状态确定工作绩效圆点的颜色
+        let performancePointColor = 'rgba(40, 167, 69, 1)';  // 默认绿色
+        if (performanceStatusColor === 'RED') {
+            performancePointColor = 'rgba(220, 53, 69, 1)';  // 红色
+        } else if (performanceStatusColor === 'ORANGE') {
+            performancePointColor = 'rgba(255, 193, 7, 1)';  // 橙色
+        }
+
+        // 雷达图保持默认蓝色，但培训能力、安全意识和工作绩效圆点颜色单独设置
+        const defaultBlue = 'rgba(54, 162, 235, 1)';
+        const radarData = {
+            labels: ['培训能力', '安全意识', '工作绩效', '学习能力', '稳定性'],
+            datasets: [{
+                label: '个人能力评分',
+                data: [
+                    scores.training,
+                    scores.safety,
+                    scores.performance,
+                    scores.learning,
+                    scores.stability
+                ],
+                backgroundColor: 'rgba(54, 162, 235, 0.3)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2,
+                // 为每个维度设置不同的圆点颜色
+                pointBackgroundColor: [
+                    trainingPointColor,       // 0: 培训能力（根据状态变色）
+                    safetyPointColor,         // 1: 安全意识（根据状态变色）
+                    performancePointColor,    // 2: 工作绩效（根据状态变色）
+                    defaultBlue,              // 3: 学习能力
+                    defaultBlue               // 4: 稳定性
+                ],
+                pointBorderColor: [
+                    trainingPointColor,
+                    safetyPointColor,
+                    performancePointColor,
+                    defaultBlue,
+                    defaultBlue
+                ],
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        };
+
+        comprehensiveRadarChart = new Chart(canvas, {
+            type: 'radar',
+            data: radarData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            font: { size: 12 }
+                        },
+                        pointLabels: {
+                            font: { size: 14, weight: 'bold' }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { font: { size: 14 } }
+                    },
+                    tooltip: {
+                        // 自定义tooltip背景颜色
+                        backgroundColor: function(context) {
+                            if (context.tooltip.dataPoints && context.tooltip.dataPoints[0]) {
+                                const dataIndex = context.tooltip.dataPoints[0].dataIndex;
+
+                                // 培训能力（索引0）
+                                if (dataIndex === 0) {
+                                    if (trainingStatusColor === 'RED') {
+                                        return 'rgba(220, 53, 69, 0.9)';
+                                    } else if (trainingStatusColor === 'ORANGE') {
+                                        return 'rgba(255, 193, 7, 0.9)';
+                                    } else if (trainingStatusColor === 'YELLOW') {
+                                        return 'rgba(255, 235, 59, 0.9)';
+                                    } else if (trainingStatusColor === 'PURPLE') {
+                                        return 'rgba(156, 39, 176, 0.9)';
+                                    } else {
+                                        return 'rgba(40, 167, 69, 0.9)';
+                                    }
+                                }
+
+                                // 安全意识（索引1）
+                                if (dataIndex === 1) {
+                                    if (safetyStatusColor === 'RED') {
+                                        return 'rgba(220, 53, 69, 0.9)';
+                                    } else if (safetyStatusColor === 'ORANGE') {
+                                        return 'rgba(255, 193, 7, 0.9)';
+                                    } else {
+                                        return 'rgba(40, 167, 69, 0.9)';
+                                    }
+                                }
+
+                                // 工作绩效（索引2）
+                                if (dataIndex === 2) {
+                                    if (performanceStatusColor === 'RED') {
+                                        return 'rgba(220, 53, 69, 0.9)';
+                                    } else if (performanceStatusColor === 'ORANGE') {
+                                        return 'rgba(255, 193, 7, 0.9)';
+                                    } else {
+                                        return 'rgba(40, 167, 69, 0.9)';
+                                    }
+                                }
+                            }
+                            // 其他维度使用默认黑色背景
+                            return 'rgba(0, 0, 0, 0.8)';
+                        },
+                        titleColor: 'white',
+                        bodyColor: 'white',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        callbacks: {
+                            label: function(context) {
+                                // 培训能力维度（索引0）
+                                if (context.dataIndex === 0) {
+                                    return [
+                                        `${context.label}: ${context.parsed.r.toFixed(1)} 分`,
+                                        '',
+                                        trainingAlertTag
+                                    ];
+                                }
+                                // 安全意识维度（索引1）
+                                if (context.dataIndex === 1) {
+                                    return [
+                                        `${context.label}: ${context.parsed.r.toFixed(1)} 分`,
+                                        '',
+                                        safetyAlertTag
+                                    ];
+                                }
+                                // 工作绩效维度（索引2）
+                                if (context.dataIndex === 2) {
+                                    return [
+                                        `${context.label}: ${context.parsed.r.toFixed(1)} 分`,
+                                        '',
+                                        performanceAlertTag
+                                    ];
+                                }
+                                return `${context.label}: ${context.parsed.r.toFixed(1)} 分`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('页面加载完成，开始初始化...');
+
+        // 初始化日期筛选器（月份模式，会自动检测input type="month"）
+        const dateFilter = new DateFilterHelper({
+            startDateId: 'filterStartDate',
+            endDateId: 'filterEndDate',
+            defaultRange: 'current_month',
+            showQuickButtons: true,
+            validateDates: true,
+            updateCallback: updatePageDateRange
+        });
+
+        loadKeyPersonnelConfig();  // 先加载配置
+        loadDepartments();
+        loadStudents();
+    });
+</script>
+{% endblock %}

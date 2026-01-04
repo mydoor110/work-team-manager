@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">{{ department.name }}</h5>
+    <small class="text-muted">部门详情与管理</small>
+  </div>
+  <a href="{{ url_for('departments.index') }}" class="btn btn-outline-secondary">返回部门列表</a>
+</div>
+
+<div class="row g-4">
+  <!-- 部门基本信息 -->
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h6 class="mb-0">基本信息</h6>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="action" value="update">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">部门名称</label>
+              <input type="text" name="name" class="form-control"
+                     value="{{ department.name }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">部门负责人</label>
+              <select name="manager_user_id" class="form-select">
+                <option value="">请选择负责人</option>
+                {% for user in users %}
+                <option value="{{ user.id }}"
+                        {% if user.id == department.manager_user_id %}selected{% endif %}>
+                  {{ user.username }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">部门描述</label>
+              <textarea name="description" class="form-control" rows="3">{{ department.description or '' }}</textarea>
+            </div>
+          </div>
+          <hr>
+          <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-primary">保存修改</button>
+            {% if department.id != 1 %}
+            <button type="button" class="btn btn-outline-danger"
+                    onclick="confirmDelete('{{ department.name }}')">
+              删除部门
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 部门统计信息 -->
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h6 class="mb-0">统计信息</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 text-center">
+          <div class="col-6">
+            <div class="border rounded p-2">
+              <h6 class="text-primary mb-1">{{ department.level }}</h6>
+              <small class="text-muted">部门层级</small>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="border rounded p-2">
+              <h6 class="text-success mb-1">{{ department.child_count or 0 }}</h6>
+              <small class="text-muted">子部门数</small>
+            </div>
+          </div>
+        </div>
+        <hr>
+        <div class="small">
+          <div class="mb-2">
+            <strong>路径:</strong> {{ department.path or '/' }}
+          </div>
+          <div class="mb-2">
+            <strong>创建时间:</strong><br>
+            {{ department.created_at }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 快速操作 -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header">
+        <h6 class="mb-0">快速操作</h6>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary"
+                  onclick="createSubDept({{ department.id }}, '{{ department.name }}')">
+            <i class="fas fa-plus me-2"></i>添加子部门
+          </button>
+          <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-users me-2"></i>管理用户
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 部门员工列表 -->
+<div class="card shadow-sm mt-4">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <h6 class="mb-0">部门员工 ({{ employees|length }})</h6>
+    <a href="{{ url_for('personnel.index') }}" class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-users me-1"></i>前往人员管理
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if employees %}
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>工号</th>
+            <th>姓名</th>
+            <th>岗位</th>
+            <th>班级</th>
+            <th>取证日期</th>
+            <th>取证年限 (年)</th>
+            <th>单独驾驶日期</th>
+            <th>单独驾驶年限 (年)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+          <tr>
+            <td>{{ emp.emp_no }}</td>
+            <td>{{ emp.name }}</td>
+            <td>{{ emp.position or '-' }}</td>
+            <td>{{ emp.class_name or '-' }}</td>
+            <td>{{ emp.certification_date or '-' }}</td>
+            <td>
+              {% if emp.certification_years is not none %}
+              {{ "%.1f"|format(emp.certification_years) }}
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td>{{ emp.solo_driving_date or '-' }}</td>
+            <td>
+              {% if emp.solo_driving_years is not none %}
+              {{ "%.1f"|format(emp.solo_driving_years) }}
+              {% else %}
+              -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-4 text-center text-muted">
+      <i class="fas fa-users fa-2x mb-2 opacity-50"></i>
+      <p class="mb-0">该部门暂无员工</p>
+      <small>请在<a href="{{ url_for('personnel.index') }}">人员管理</a>页面为员工分配部门</small>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">确认删除</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>确定要删除部门 "<span id="deleteDeptName"></span>" 吗？</p>
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>注意:</strong> 删除部门前请确保：
+          <ul class="mb-0 mt-2">
+            <li>该部门没有子部门</li>
+            <li>该部门没有关联的用户</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <form method="post" style="display: inline;">
+          <input type="hidden" name="action" value="delete">
+          <button type="submit" class="btn btn-danger">确认删除</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新建子部门模态框 -->
+<div class="modal fade" id="newSubDeptModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">新建子部门</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{{ url_for('departments.index') }}" method="post">
+        <div class="modal-body">
+          <input type="hidden" name="action" value="create">
+          <input type="hidden" name="parent_id" value="{{ department.id }}">
+          <div class="mb-3">
+            <label class="form-label">部门名称</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">部门负责人</label>
+            <select name="manager_user_id" class="form-select">
+              <option value="">请选择负责人</option>
+              {% for user in users %}
+              <option value="{{ user.id }}">{{ user.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">部门描述</label>
+            <textarea name="description" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">创建子部门</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function confirmDelete(deptName) {
+  document.getElementById('deleteDeptName').textContent = deptName;
+  const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  modal.show();
+}
+
+function createSubDept(parentId, parentName) {
+  const modal = new bootstrap.Modal(document.getElementById('newSubDeptModal'));
+  document.querySelector('#newSubDeptModal .modal-title').textContent = `新建 ${parentName} 的子部门`;
+  modal.show();
+}
+</script>
+{% endblock %}

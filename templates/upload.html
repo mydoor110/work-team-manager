@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h5 class="mb-3">上传 月度绩效 PDF</h5>
+
+{% if confirm_ctx %}
+<div class="alert alert-warning" role="alert">
+  <div>文件中识别到的考核周期：{{ confirm_ctx.parsed_year }} 年 {{ '%02d' % confirm_ctx.parsed_month }} 月。</div>
+  <div>当前选择的考核周期：{{ selected_year }} 年 {{ '%02d' % selected_month }} 月。</div>
+  <div class="mt-2">如确认仍以所选周期导入，请点击下方“确认导入”。重新选择文件请点击右侧链接。</div>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="force_import" value="{{ '1' if confirm_ctx else '0' }}">
+  {% if confirm_ctx %}
+    <input type="hidden" name="pending_filename" value="{{ confirm_ctx.filename }}">
+  {% endif %}
+  <div class="row g-3 mb-3">
+    <div class="col-sm-6 col-md-3">
+      <label class="form-label" for="target-year">年份</label>
+      <select id="target-year" class="form-select" name="target_year" required>
+        {% for y in year_options %}
+        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-6 col-md-3">
+      <label class="form-label" for="target-month">月份</label>
+      <select id="target-month" class="form-select" name="target_month" required>
+        {% for m in range(1, 13) %}
+        <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ '%02d' % m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  {% if confirm_ctx %}
+  <div class="mb-3">
+    <div class="form-text">使用已上传文件：{{ confirm_ctx.filename }}</div>
+    <a class="btn btn-link px-0" href="{{ url_for('performance.upload') }}">重新选择文件</a>
+  </div>
+  {% else %}
+  <div class="mb-3">
+    <label class="form-label" for="pdf-file">选择文件</label>
+    <input id="pdf-file" class="form-control" type="file" name="file" accept=".pdf" required>
+  </div>
+  {% endif %}
+  <button class="btn btn-success" type="submit">{{ '确认导入' if confirm_ctx else '上传并解析' }}</button>
+  <a class="btn btn-secondary" href="{{ url_for('performance.records') }}">返回列表</a>
+</form>
+
+<div class="mt-4">
+  <div class="alert alert-info">
+    <div>说明：</div>
+    <ol class="mb-0">
+      <li>仅支持 PDF 含文本层的固定模板（含“序号 工号 姓名 等级 分数”列）。</li>
+      <li>仅导入“员工花名册”中存在的工号。缺失人员将被跳过并提示数量。</li>
+    </ol>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="py-5 text-center">
+  <h1 class="mb-3">{{ heading }}</h1>
+  <p class="lead text-muted mb-4">{{ message }}</p>
+  <a class="btn btn-outline-primary" href="{{ url_for('performance.index') }}">返回绩效工作台</a>
+</div>
+{% endblock %}

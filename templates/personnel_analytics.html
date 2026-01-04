@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">人员数据分析</h5>
+    <small class="text-muted">可视化分析人员结构、班组战力、经验分布等关键指标</small>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('personnel.dashboard') }}" class="btn btn-outline-secondary btn-sm">返回工作台</a>
+    <a href="{{ url_for('personnel.index') }}" class="btn btn-secondary btn-sm">人员管理</a>
+  </div>
+</div>
+
+<!-- KPI 卡片 -->
+<div class="row g-4 mb-4">
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">在册总人数</h6>
+        <p class="card-text fs-1 fw-bold" id="kpi-total-count">0</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">电客车司机</h6>
+        <p class="card-text fs-1 fw-bold text-primary" id="kpi-driver-count">0</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">新手司机数</h6>
+        <p class="card-text fs-1 fw-bold text-warning" id="kpi-rookie-count">0</p>
+        <small class="text-muted">(单驾 < 1年)</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6 class="card-subtitle mb-2 text-muted">党员占比</h6>
+        <p class="card-text fs-1 fw-bold text-danger" id="kpi-party-rate">0%</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 图表区域 -->
+<!-- 第一行：安全风险等级分布图 + 班组战力雷达图 -->
+<div class="row g-4 mb-4">
+  <div class="col-xl-6 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div id="riskDistributionChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div id="teamPowerChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 第二行：经验溢出分析图 + 职业稳定性分析 -->
+<div class="row g-4 mb-4">
+  <div class="col-xl-6 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div id="experienceScatterChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div id="stabilityScatterChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 第三行：排班压力预警图 -->
+<div class="row g-4 mb-4">
+  <div class="col-xl-8 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div id="scheduleWarningChart" style="width: 100%; min-height: 400px; height: 50vh; max-height: 600px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-4 col-lg-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-title text-center mb-3">政治面貌分布</h6>
+        <div id="politicalStatusChart" style="width: 100%; min-height: 350px; height: 45vh; max-height: 500px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 引入 ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const riskDistributionChart = echarts.init(document.getElementById('riskDistributionChart'));
+  const teamPowerChart = echarts.init(document.getElementById('teamPowerChart'));
+  const experienceScatterChart = echarts.init(document.getElementById('experienceScatterChart'));
+  const stabilityScatterChart = echarts.init(document.getElementById('stabilityScatterChart'));
+  const scheduleWarningChart = echarts.init(document.getElementById('scheduleWarningChart'));
+  const politicalStatusChart = echarts.init(document.getElementById('politicalStatusChart'));
+
+  const charts = [
+    riskDistributionChart,
+    teamPowerChart,
+    experienceScatterChart,
+    stabilityScatterChart,
+    scheduleWarningChart,
+    politicalStatusChart
+  ];
+
+  function fetchAndRenderCharts() {
+    const apiUrl = `{{ url_for('personnel.api_analytics_data') }}`;
+
+    charts.forEach(chart => chart.showLoading());
+
+    fetch(apiUrl)
+      .then(response => response.json())
+      .then(data => {
+        charts.forEach(chart => chart.hideLoading());
+
+        updateKpis(data);
+        renderRiskDistribution(data.risk_distribution);
+        renderTeamPower(data.team_power);
+        renderExperienceScatter(data.experience_scatter);
+        renderStabilityScatter(data.stability_scatter);
+        renderScheduleWarning(data.hometown_stats);
+        renderPoliticalStatus(data.political_stats);
+      })
+      .catch(error => {
+        charts.forEach(chart => {
+          try { chart.hideLoading(); } catch(e) {}
+        });
+        console.error('Error fetching analytics data:', error);
+      });
+  }
+
+  function updateKpis(data) {
+    document.getElementById('kpi-total-count').textContent = data.total_count || 0;
+    document.getElementById('kpi-driver-count').textContent = data.driver_count || 0;
+
+    const rookieCount = data.risk_distribution['新手(<1年)'] || 0;
+    document.getElementById('kpi-rookie-count').textContent = rookieCount;
+
+    const totalCount = data.total_count || 1;
+    const partyMembers = (data.political_stats['中共党员'] || 0) + (data.political_stats['中共预备党员'] || 0);
+    const partyRate = ((partyMembers / totalCount) * 100).toFixed(1);
+    document.getElementById('kpi-party-rate').textContent = partyRate + '%';
+  }
+
+  // 1. 安全风险等级分布图 (漏斗图)
+  function renderRiskDistribution(riskData) {
+    const data = Object.entries(riskData).map(([name, value]) => ({
+      name: name,
+      value: value
+    })).filter(item => item.name !== '未知');
+
+    const option = {
+      title: {
+        text: '安全风险等级分布',
+        subtext: '按入司后单独驾驶年限分级（仅统计电客车司机）',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}人 ({d}%)'
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left',
+        top: '15%'
+      },
+      series: [{
+        name: '安全风险',
+        type: 'funnel',
+        left: '20%',
+        top: '20%',
+        bottom: '10%',
+        width: '60%',
+        min: 0,
+        max: 100,
+        minSize: '0%',
+        maxSize: '100%',
+        sort: 'descending',
+        gap: 2,
+        label: {
+          show: true,
+          position: 'inside',
+          formatter: '{b}: {c}人'
+        },
+        labelLine: {
+          length: 10,
+          lineStyle: {
+            width: 1,
+            type: 'solid'
+          }
+        },
+        itemStyle: {
+          borderColor: '#fff',
+          borderWidth: 1
+        },
+        emphasis: {
+          label: {
+            fontSize: 16
+          }
+        },
+        data: data.sort((a, b) => {
+          const order = {'新手(<1年)': 4, '成长(1-3年)': 3, '熟练(3-5年)': 2, '资深(≥5年)': 1};
+          return (order[a.name] || 0) - (order[b.name] || 0);
+        })
+      }],
+      color: ['#d62728', '#ff7f0e', '#ffd700', '#2ca02c']
+    };
+    riskDistributionChart.setOption(option);
+  }
+
+  // 2. 部门战力雷达图
+  function renderTeamPower(teamData) {
+    if (teamData.length === 0) {
+      const option = {
+        title: { text: '部门战力雷达图', subtext: '暂无数据', left: 'center' }
+      };
+      teamPowerChart.setOption(option);
+      return;
+    }
+
+    // 找出最大值用于雷达图刻度
+    const maxTenure = Math.max(...teamData.map(t => t.avg_tenure)) || 10;
+    const maxSolo = Math.max(...teamData.map(t => t.avg_solo)) || 10;
+    const maxCert = Math.max(...teamData.map(t => t.avg_cert)) || 10;
+
+    const indicator = [
+      { name: '平均司龄', max: Math.ceil(maxTenure * 1.2) },
+      { name: '平均驾龄', max: Math.ceil(maxSolo * 1.2) },
+      { name: '平均取证年限', max: Math.ceil(maxCert * 1.2) }
+    ];
+
+    const seriesData = teamData.map(team => ({
+      name: `${team.team} (${team.member_count}人)`,
+      value: [team.avg_tenure, team.avg_solo, team.avg_cert]
+    }));
+
+    const option = {
+      title: {
+        text: '部门战力雷达图',
+        subtext: '比较各部门综合经验（仅统计电客车司机）',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'item'
+      },
+      legend: {
+        bottom: 10,
+        type: 'scroll',
+        data: seriesData.map(s => s.name)
+      },
+      radar: {
+        indicator: indicator,
+        center: ['50%', '50%'],
+        radius: '60%'
+      },
+      series: [{
+        name: '部门战力',
+        type: 'radar',
+        data: seriesData
+      }]
+    };
+    teamPowerChart.setOption(option);
+  }
+
+  // 3. 经验溢出分析图 (散点图)
+  function renderExperienceScatter(scatterData) {
+    const categories = ['新手', '普通', '准师傅', '资深师傅'];
+    const colorMap = {
+      '新手': '#1f77b4',
+      '普通': '#aec7e8',
+      '准师傅': '#ff7f0e',
+      '资深师傅': '#2ca02c'
+    };
+
+    const seriesData = categories.map(category => {
+      const data = scatterData
+        .filter(item => item.category === category)
+        .map(item => [item.cert_years, item.solo_years, item.name]);
+
+      return {
+        name: category,
+        type: 'scatter',
+        data: data,
+        symbolSize: 10,
+        itemStyle: {
+          color: colorMap[category]
+        },
+        emphasis: {
+          focus: 'series',
+          label: {
+            show: true,
+            formatter: params => params.data[2],
+            position: 'top'
+          }
+        }
+      };
+    });
+
+    const option = {
+      title: {
+        text: '经验溢出分析图',
+        subtext: '挖掘"准师傅"与资深人才',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: params => {
+          return `${params.data[2]}<br/>取证: ${params.data[0]}年<br/>单驾: ${params.data[1]}年`;
+        }
+      },
+      legend: {
+        bottom: 10,
+        data: categories
+      },
+      grid: {
+        left: '10%',
+        right: '10%',
+        bottom: '15%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        name: '取证年限',
+        splitLine: { show: true, lineStyle: { type: 'dashed' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: '单独驾驶年限',
+        splitLine: { show: true, lineStyle: { type: 'dashed' } }
+      },
+      series: seriesData,
+      dataZoom: [
+        { type: 'inside' }
+      ]
+    };
+    experienceScatterChart.setOption(option);
+  }
+
+  // 4. 职业稳定性分析 (散点图)
+  function renderStabilityScatter(scatterData) {
+    const categories = ['应届入职', '社招(新)', '社招(老)'];
+    const colorMap = {
+      '应届入职': '#2ca02c',
+      '社招(新)': '#1f77b4',
+      '社招(老)': '#ff7f0e'
+    };
+
+    const seriesData = categories.map(category => {
+      const data = scatterData
+        .filter(item => item.category === category)
+        .map(item => [item.tenure, item.working, item.name]);
+
+      return {
+        name: category,
+        type: 'scatter',
+        data: data,
+        symbolSize: 10,
+        itemStyle: {
+          color: colorMap[category]
+        },
+        emphasis: {
+          focus: 'series',
+          label: {
+            show: true,
+            formatter: params => params.data[2],
+            position: 'top'
+          }
+        }
+      };
+    });
+
+    const option = {
+      title: {
+        text: '职业稳定性分析',
+        subtext: '识别应届入职与社招员工（仅统计电客车司机）',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: params => {
+          return `${params.data[2]}<br/>司龄: ${params.data[0]}年<br/>工龄: ${params.data[1]}年`;
+        }
+      },
+      legend: {
+        bottom: 10,
+        data: categories
+      },
+      grid: {
+        left: '10%',
+        right: '10%',
+        bottom: '15%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        name: '司龄',
+        splitLine: { show: true, lineStyle: { type: 'dashed' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: '工龄',
+        splitLine: { show: true, lineStyle: { type: 'dashed' } }
+      },
+      series: seriesData,
+      dataZoom: [
+        { type: 'inside' }
+      ]
+    };
+    stabilityScatterChart.setOption(option);
+  }
+
+  // 5. 排班压力预警图 (籍贯分布)
+  function renderScheduleWarning(hometownStats) {
+    const sortedData = Object.entries(hometownStats)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15); // 只显示前15个省份
+
+    const provinces = sortedData.map(item => item[0]);
+    const counts = sortedData.map(item => item[1]);
+
+    const option = {
+      title: {
+        text: '排班压力预警图',
+        subtext: '籍贯分布 - 用于节假日保供分析',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        data: provinces,
+        axisLabel: {
+          interval: 0,
+          rotate: 30
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: '人数'
+      },
+      series: [{
+        name: '人数',
+        type: 'bar',
+        data: counts,
+        label: {
+          show: true,
+          position: 'top'
+        },
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#83bff6' },
+            { offset: 0.5, color: '#188df0' },
+            { offset: 1, color: '#188df0' }
+          ])
+        }
+      }],
+      dataZoom: [
+        { type: 'inside' }
+      ]
+    };
+    scheduleWarningChart.setOption(option);
+  }
+
+  // 6. 政治面貌分布图
+  function renderPoliticalStatus(politicalStats) {
+    const data = Object.entries(politicalStats).map(([name, value]) => ({
+      name: name,
+      value: value
+    }));
+
+    const option = {
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}人 ({d}%)'
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left',
+        top: '10%'
+      },
+      series: [{
+        name: '政治面貌',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '60%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: true,
+          formatter: '{b}\n{c}人'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold'
+          }
+        },
+        data: data
+      }],
+      color: ['#d62728', '#ff7f0e', '#2ca02c', '#1f77b4', '#9467bd']
+    };
+    politicalStatusChart.setOption(option);
+  }
+
+  // 页面加载时执行
+  fetchAndRenderCharts();
+
+  // 监听窗口大小变化，重绘图表
+  window.addEventListener('resize', function() {
+    charts.forEach(chart => chart.resize());
+  });
+});
+</script>
+{% endblock %}

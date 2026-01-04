@@ -1,0 +1,1006 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        min-height: 400px;
+        width: 100%;
+        padding: 20px;
+    }
+
+    .chart-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .chart-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        padding: 15px 20px;
+        border-bottom: 1px solid #e0e0e0;
+        background: #f8f9fa;
+    }
+
+    .kpi-card {
+        text-align: center;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .kpi-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+
+    .kpi-label {
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .tab-content {
+        padding-top: 20px;
+    }
+
+    .no-data-message {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+        font-size: 1.1rem;
+    }
+
+    @media (max-width: 768px) {
+        .chart-container {
+            min-height: 300px;
+            padding: 10px;
+        }
+
+        .kpi-value {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>安全管理数据分析</h2>
+            <p class="text-muted mb-0">基于考核情况的安全隐患分析与人员风险评估</p>
+        </div>
+        <a href="{{ url_for('safety.index') }}" class="btn btn-secondary">返回</a>
+    </div>
+
+    <!-- 日期筛选器 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form id="filterForm" class="row g-3 align-items-end">
+                {% set col_class = 'col-md-2' %}
+                {% set show_quick_buttons = true %}
+                {% set show_range_label = true %}
+                {% include 'components/date_filter.html' %}
+
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> 查询
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-secondary w-100" id="resetBtn">
+                        <i class="bi bi-arrow-counterclockwise"></i> 重置
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- KPI 指标卡片 -->
+    <div class="row mb-4" id="kpiCards">
+        <div class="col-md-3 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-label">问题总数</div>
+                <div class="kpi-value text-primary" id="kpiTotalProblems">0</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-label">累计扣分</div>
+                <div class="kpi-value text-danger" id="kpiTotalScore">0</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-label">高风险人员</div>
+                <div class="kpi-value text-warning" id="kpiHighRiskPersonnel">0</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-label">高频失分项</div>
+                <div class="kpi-value text-info" id="kpiTopProblem">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 多标签页导航 -->
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="tab" href="#overview" role="tab">
+                总览
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#personnel" role="tab">
+                人员分析
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#items" role="tab">
+                项目分析
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#trend" role="tab">
+                趋势分析
+            </a>
+        </li>
+    </ul>
+
+    <!-- 标签页内容 -->
+    <div class="tab-content">
+        <!-- Tab 1: 总览 -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">
+                            问题严重度分布
+                            <small class="text-muted ms-2">(点击分数段查看人员详情)</small>
+                        </div>
+                        <div class="chart-container" id="chartSeverityDistribution"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">高频失分项目 Top 10</div>
+                        <div class="chart-container" id="chartTopLossItems"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: 人员分析 -->
+        <div class="tab-pane fade" id="personnel" role="tabpanel">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">人员风险矩阵（右上角为高风险人员）</div>
+                        <div class="chart-container" id="chartPersonnelRiskMatrix" style="min-height: 500px;"></div>
+                    </div>
+                </div>
+                <div class="col-12 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">问题发现/整改能手榜 Top 10</div>
+                        <div class="chart-container" id="chartTopContributors"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: 项目分析 -->
+        <div class="tab-pane fade" id="items" role="tabpanel">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">高频失分项目详细分析</div>
+                        <div class="chart-container" id="chartTopLossItemsDetailed" style="min-height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: 趋势分析 -->
+        <div class="tab-pane fade" id="trend" role="tabpanel">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="chart-card">
+                        <div class="chart-title">每日违规趋势（双轴图）</div>
+                        <div class="chart-container" id="chartDailyTrend" style="min-height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 问题详情模态框 -->
+    <div class="modal fade" id="problemDrilldownModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="drilldownModalTitle">问题详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="drilldownModalBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+    // 全局图表实例
+    let charts = {};
+
+    // 全局日期筛选器实例
+    let dateFilter = null;
+
+    // 获取当前筛选参数
+    function getFilterParams() {
+        if (dateFilter) {
+            return dateFilter.getQueryString();
+        }
+        // 降级方案
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        return params.toString();
+    }
+
+    // 初始化所有图表
+    async function initCharts() {
+        try {
+            // 加载所有数据并初始化图表
+            await Promise.all([
+                initSeverityDistribution(),
+                initDailyTrend(),
+                initTopLossItems(),
+                initPersonnelRiskMatrix(),
+                initTopContributors()
+            ]);
+
+            // 更新KPI
+            updateKPI();
+        } catch (error) {
+            console.error('图表初始化失败:', error);
+            showError('数据加载失败，请刷新页面重试');
+        }
+    }
+
+    // 图表A：问题严重度分布（饼图）
+    async function initSeverityDistribution() {
+        const params = getFilterParams();
+        const response = await fetch(`/safety/api/analytics/severity-distribution?${params}`);
+        const data = await response.json();
+
+        const chartDom = document.getElementById('chartSeverityDistribution');
+
+        // 销毁旧的图表实例
+        if (charts.severityDistribution) {
+            charts.severityDistribution.dispose();
+            charts.severityDistribution = null;
+        }
+
+        // 清空容器内容
+        chartDom.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            chartDom.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            return;
+        }
+
+        const chart = echarts.init(chartDom);
+        charts.severityDistribution = chart;
+
+        const option = {
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} 次 ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                right: 10,
+                top: 'center'
+            },
+            series: [{
+                name: '问题严重度',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: true,
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                },
+                label: {
+                    show: true,
+                    formatter: '{b}\n{c} 次'
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                    }
+                },
+                data: data
+            }]
+        };
+
+        chart.setOption(option);
+
+        // 添加点击事件 - 下钻查看人员详情
+        chart.on('click', function(params) {
+            if (params.data && params.data.name) {
+                handleSeverityDrilldown(params.data.name);
+            }
+        });
+    }
+
+    // 处理严重度下钻
+    async function handleSeverityDrilldown(scoreLabel) {
+        const params = getFilterParams();
+        const url = `/safety/api/analytics/severity-drilldown?score=${encodeURIComponent(scoreLabel)}&${params}`;
+
+        try {
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (!result.canDrilldown) {
+                // 不支持下钻，显示提示信息
+                showDrilldownMessage(scoreLabel, result.message, result.problemCount || 0);
+            } else {
+                // 支持下钻，展示问题详情
+                showProblemDetails(result);
+            }
+        } catch (error) {
+            console.error('下钻查询失败:', error);
+            alert('查询失败，请重试');
+        }
+    }
+
+    // 显示不支持下钻的提示信息
+    function showDrilldownMessage(scoreLabel, message, count) {
+        const modalElement = document.getElementById('problemDrilldownModal');
+        if (!modalElement) {
+            console.error('模态框元素不存在');
+            return;
+        }
+
+        // 清理之前的模态框实例
+        const existingModal = bootstrap.Modal.getInstance(modalElement);
+        if (existingModal) {
+            try {
+                existingModal.dispose();
+            } catch (e) {
+                console.warn('清理模态框实例失败:', e);
+            }
+        }
+
+        // 清理可能残留的backdrop
+        cleanupModalBackdrop();
+
+        document.getElementById('drilldownModalTitle').textContent = `${scoreLabel} - 问题统计`;
+        document.getElementById('drilldownModalBody').innerHTML = `
+            <div class="alert alert-warning">
+                <h5><i class="bi bi-info-circle"></i> ${message}</h5>
+                <p class="mb-0">该分数段共有 <strong>${count}</strong> 条问题记录，由于数量过多，暂不支持查看详细列表。</p>
+            </div>
+        `;
+
+        // 使用setTimeout确保DOM更新完成
+        setTimeout(() => {
+            try {
+                const modal = new bootstrap.Modal(modalElement, {
+                    backdrop: true,
+                    keyboard: true,
+                    focus: true
+                });
+                modal.show();
+            } catch (e) {
+                console.error('显示模态框失败:', e);
+            }
+        }, 100);
+    }
+
+    // 显示问题详情
+    function showProblemDetails(result) {
+        const modalElement = document.getElementById('problemDrilldownModal');
+        if (!modalElement) {
+            console.error('模态框元素不存在');
+            return;
+        }
+
+        // 清理之前的模态框实例
+        const existingModal = bootstrap.Modal.getInstance(modalElement);
+        if (existingModal) {
+            try {
+                existingModal.dispose();
+            } catch (e) {
+                console.warn('清理模态框实例失败:', e);
+            }
+        }
+
+        // 清理可能残留的backdrop
+        cleanupModalBackdrop();
+
+        document.getElementById('drilldownModalTitle').textContent =
+            `${result.scoreLabel} - 问题详情 (共${result.problemCount}条)`;
+
+        let html = `
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle"></i> ${result.message}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">序号</th>
+                            <th style="width: 90px;">检查日期</th>
+                            <th style="width: 80px;">被检查人</th>
+                            <th style="width: 100px;">责任车队</th>
+                            <th style="width: 80px;">地点</th>
+                            <th>存在隐患和问题</th>
+                            <th style="width: 120px;">整改措施</th>
+                            <th style="width: 80px;">整改状态</th>
+                            <th style="width: 60px;">扣分</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        result.problems.forEach((problem, index) => {
+            // 根据整改状态设置不同的徽章颜色
+            let statusBadgeClass = 'bg-warning';
+            if (problem.rectificationStatus.includes('已整改')) {
+                statusBadgeClass = 'bg-success';
+            } else if (problem.rectificationStatus.includes('未整改')) {
+                statusBadgeClass = 'bg-danger';
+            }
+
+            html += `
+                <tr>
+                    <td class="text-center">${index + 1}</td>
+                    <td>${problem.date}</td>
+                    <td><strong>${problem.inspectedPerson}</strong></td>
+                    <td>${problem.team}</td>
+                    <td>${problem.location}</td>
+                    <td>
+                        <div class="text-truncate" style="max-width: 300px;" title="${problem.hazardDescription}">
+                            ${problem.hazardDescription}
+                        </div>
+                        ${problem.inspectionItem ? `<div class="text-muted small mt-1">检查项目: ${problem.inspectionItem}</div>` : ''}
+                    </td>
+                    <td>
+                        <div class="text-truncate" style="max-width: 200px;" title="${problem.correctiveMeasures}">
+                            ${problem.correctiveMeasures}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge ${statusBadgeClass}">${problem.rectificationStatus}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-danger">${problem.score}</span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        document.getElementById('drilldownModalBody').innerHTML = html;
+
+        // 使用setTimeout确保DOM更新完成
+        setTimeout(() => {
+            try {
+                const modal = new bootstrap.Modal(modalElement, {
+                    backdrop: true,
+                    keyboard: true,
+                    focus: true
+                });
+                modal.show();
+            } catch (e) {
+                console.error('显示模态框失败:', e);
+            }
+        }, 100);
+    }
+
+    // 图表B：每日违规趋势（双轴图）
+    async function initDailyTrend() {
+        const params = getFilterParams();
+        const response = await fetch(`/safety/api/analytics/daily-trend?${params}`);
+        const data = await response.json();
+
+        const chartDom = document.getElementById('chartDailyTrend');
+
+        // 销毁旧的图表实例
+        if (charts.dailyTrend) {
+            charts.dailyTrend.dispose();
+            charts.dailyTrend = null;
+        }
+
+        // 清空容器内容
+        chartDom.innerHTML = '';
+
+        if (!data.dates || data.dates.length === 0) {
+            chartDom.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            return;
+        }
+
+        const chart = echarts.init(chartDom);
+        charts.dailyTrend = chart;
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            legend: {
+                data: ['违规次数', '累计扣分']
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: true,
+                data: data.dates,
+                axisLabel: {
+                    rotate: 45
+                }
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '违规次数',
+                    position: 'left'
+                },
+                {
+                    type: 'value',
+                    name: '累计扣分',
+                    position: 'right'
+                }
+            ],
+            series: [
+                {
+                    name: '违规次数',
+                    type: 'bar',
+                    data: data.counts,
+                    itemStyle: {
+                        color: '#5470c6'
+                    }
+                },
+                {
+                    name: '累计扣分',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    data: data.scores,
+                    smooth: true,
+                    itemStyle: {
+                        color: '#ee6666'
+                    },
+                    lineStyle: {
+                        width: 3
+                    }
+                }
+            ]
+        };
+
+        chart.setOption(option);
+    }
+
+    // 图表C：高频失分项目 Top 10（横向条形图）
+    async function initTopLossItems() {
+        const params = getFilterParams();
+        const response = await fetch(`/safety/api/analytics/top-loss-items?${params}`);
+        const data = await response.json();
+
+        // 总览页面的简化版
+        const chartDom1 = document.getElementById('chartTopLossItems');
+        // 销毁旧的图表实例
+        if (charts.topLossItems) {
+            charts.topLossItems.dispose();
+            charts.topLossItems = null;
+        }
+        chartDom1.innerHTML = '';
+
+        // 项目分析页面的详细版
+        const chartDom2 = document.getElementById('chartTopLossItemsDetailed');
+        // 销毁旧的图表实例
+        if (charts.topLossItemsDetailed) {
+            charts.topLossItemsDetailed.dispose();
+            charts.topLossItemsDetailed = null;
+        }
+        chartDom2.innerHTML = '';
+
+        if (!data.items || data.items.length === 0) {
+            chartDom1.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            chartDom2.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            return;
+        }
+
+        const chart1 = echarts.init(chartDom1);
+        charts.topLossItems = chart1;
+        const chart2 = echarts.init(chartDom2);
+        charts.topLossItemsDetailed = chart2;
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                },
+                formatter: '{b0}: {c0} 分'
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'value',
+                name: '累计扣分'
+            },
+            yAxis: {
+                type: 'category',
+                data: data.items,
+                axisLabel: {
+                    fontSize: 11,
+                    formatter: function(value) {
+                        return value.length > 20 ? value.substring(0, 20) + '...' : value;
+                    }
+                }
+            },
+            series: [{
+                name: '累计扣分',
+                type: 'bar',
+                data: data.scores,
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#83bff6' },
+                        { offset: 1, color: '#188df0' }
+                    ])
+                },
+                barWidth: '60%',
+                label: {
+                    show: true,
+                    position: 'right',
+                    formatter: '{c} 分'
+                }
+            }]
+        };
+
+        chart1.setOption(option);
+        chart2.setOption(option);
+    }
+
+    // 图表D：人员风险矩阵（散点图）
+    async function initPersonnelRiskMatrix() {
+        const params = getFilterParams();
+        const response = await fetch(`/safety/api/analytics/personnel-risk-matrix?${params}`);
+        const data = await response.json();
+
+        const chartDom = document.getElementById('chartPersonnelRiskMatrix');
+
+        // 销毁旧的图表实例
+        if (charts.personnelRiskMatrix) {
+            charts.personnelRiskMatrix.dispose();
+            charts.personnelRiskMatrix = null;
+        }
+
+        // 清空容器内容
+        chartDom.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            chartDom.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            return;
+        }
+
+        const chart = echarts.init(chartDom);
+        charts.personnelRiskMatrix = chart;
+
+        const option = {
+            tooltip: {
+                trigger: 'item',
+                formatter: function(params) {
+                    return `${params.data.name}<br/>` +
+                           `所属车队: ${params.data.team}<br/>` +
+                           `违规次数: ${params.value[0]} 次<br/>` +
+                           `累计扣分: ${params.value[1]} 分`;
+                }
+            },
+            grid: {
+                left: '3%',
+                right: '7%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                name: '违规次数',
+                nameLocation: 'middle',
+                nameGap: 30,
+                splitLine: {
+                    lineStyle: {
+                        type: 'dashed'
+                    }
+                }
+            },
+            yAxis: {
+                name: '累计扣分',
+                nameLocation: 'middle',
+                nameGap: 40,
+                splitLine: {
+                    lineStyle: {
+                        type: 'dashed'
+                    }
+                }
+            },
+            visualMap: {
+                min: 0,
+                max: Math.max(...data.map(d => d.value[1])),
+                dimension: 1,
+                orient: 'vertical',
+                right: 10,
+                top: 'center',
+                text: ['高风险', '低风险'],
+                calculable: true,
+                inRange: {
+                    color: ['#50a3ba', '#eac736', '#d94e5d']
+                }
+            },
+            series: [{
+                name: '人员风险',
+                type: 'scatter',
+                symbolSize: function(val) {
+                    return Math.max(10, val[0] * 3 + val[1] / 2);
+                },
+                data: data,
+                emphasis: {
+                    label: {
+                        show: true,
+                        formatter: function(param) {
+                            return param.data.name;
+                        },
+                        position: 'top'
+                    }
+                }
+            }]
+        };
+
+        chart.setOption(option);
+
+        // 更新高风险人员数量（右上角区域）
+        const avgX = data.reduce((sum, d) => sum + d.value[0], 0) / data.length;
+        const avgY = data.reduce((sum, d) => sum + d.value[1], 0) / data.length;
+        const highRiskCount = data.filter(d => d.value[0] > avgX && d.value[1] > avgY).length;
+        document.getElementById('kpiHighRiskPersonnel').textContent = highRiskCount;
+    }
+
+    // 图表E：问题发现能手榜 Top 10（柱状图）
+    async function initTopContributors() {
+        const params = getFilterParams();
+        const response = await fetch(`/safety/api/analytics/top-contributors?${params}`);
+        const data = await response.json();
+
+        const chartDom = document.getElementById('chartTopContributors');
+
+        // 销毁旧的图表实例
+        if (charts.topContributors) {
+            charts.topContributors.dispose();
+            charts.topContributors = null;
+        }
+
+        // 清空容器内容
+        chartDom.innerHTML = '';
+
+        if (!data.names || data.names.length === 0) {
+            chartDom.innerHTML = '<div class="no-data-message">暂无数据</div>';
+            return;
+        }
+
+        const chart = echarts.init(chartDom);
+        charts.topContributors = chart;
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: data.names,
+                axisLabel: {
+                    rotate: 45
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '问题数量'
+            },
+            series: [{
+                name: '发现/整改问题数',
+                type: 'bar',
+                data: data.counts,
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#fbc531' },
+                        { offset: 1, color: '#f39c12' }
+                    ])
+                },
+                barWidth: '50%',
+                label: {
+                    show: true,
+                    position: 'top',
+                    formatter: '{c} 个'
+                }
+            }]
+        };
+
+        chart.setOption(option);
+    }
+
+    // 更新KPI指标
+    async function updateKPI() {
+        try {
+            const params = getFilterParams();
+            // 获取所有数据
+            const [severityData, dailyData, itemsData, personnelData] = await Promise.all([
+                fetch(`/safety/api/analytics/severity-distribution?${params}`).then(r => r.json()),
+                fetch(`/safety/api/analytics/daily-trend?${params}`).then(r => r.json()),
+                fetch(`/safety/api/analytics/top-loss-items?${params}`).then(r => r.json()),
+                fetch(`/safety/api/analytics/personnel-risk-matrix?${params}`).then(r => r.json())
+            ]);
+
+            // 问题总数
+            const totalProblems = severityData.reduce((sum, item) => sum + item.value, 0);
+            document.getElementById('kpiTotalProblems').textContent = totalProblems;
+
+            // 累计扣分
+            const totalScore = dailyData.scores ? dailyData.scores.reduce((a, b) => a + b, 0) : 0;
+            document.getElementById('kpiTotalScore').textContent = totalScore.toFixed(1);
+
+            // 高频失分项
+            if (itemsData.items && itemsData.items.length > 0) {
+                const topItem = itemsData.items[0];
+                document.getElementById('kpiTopProblem').textContent =
+                    topItem.length > 10 ? topItem.substring(0, 10) + '...' : topItem;
+            }
+        } catch (error) {
+            console.error('KPI更新失败:', error);
+        }
+    }
+
+    // 显示错误信息
+    function showError(message) {
+        const alert = `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        document.querySelector('.container-fluid').insertAdjacentHTML('afterbegin', alert);
+    }
+
+    // 响应式调整
+    window.addEventListener('resize', () => {
+        Object.values(charts).forEach(chart => {
+            if (chart && typeof chart.resize === 'function') {
+                chart.resize();
+            }
+        });
+    });
+
+    // 标签页切换时调整图表大小
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function() {
+            setTimeout(() => {
+                Object.values(charts).forEach(chart => {
+                    if (chart && typeof chart.resize === 'function') {
+                        chart.resize();
+                    }
+                });
+            }, 100);
+        });
+    });
+
+    // 清理可能残留的模态框backdrop
+    function cleanupModalBackdrop() {
+        // 使用setTimeout确保在Bootstrap完成操作后再清理
+        setTimeout(() => {
+            // 移除所有残留的backdrop
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => {
+                if (backdrop && backdrop.parentNode) {
+                    backdrop.parentNode.removeChild(backdrop);
+                }
+            });
+            // 移除body上的modal相关class和样式
+            if (document.body.classList.contains('modal-open')) {
+                document.body.classList.remove('modal-open');
+            }
+            if (document.body.style.overflow) {
+                document.body.style.removeProperty('overflow');
+            }
+            if (document.body.style.paddingRight) {
+                document.body.style.removeProperty('padding-right');
+            }
+        }, 150);
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        // 清理可能残留的backdrop
+        cleanupModalBackdrop();
+
+        // 初始化日期筛选器
+        dateFilter = new DateFilterHelper({
+            defaultRange: 'current_month',  // 默认显示当月
+            onDateChange: initCharts,       // 日期变化时重新加载图表
+            showQuickButtons: true,         // 显示快捷按钮
+            validateDates: true             // 启用日期验证
+        });
+
+        // 初始化图表
+        initCharts();
+
+        // 表单提交事件
+        document.getElementById('filterForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            initCharts();
+        });
+
+        // 重置按钮事件
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            dateFilter.reset();
+            initCharts();
+        });
+
+        // 监听模态框隐藏事件，确保backdrop被清理
+        document.getElementById('problemDrilldownModal').addEventListener('hidden.bs.modal', function() {
+            cleanupModalBackdrop();
+        });
+    });
+</script>
+{% endblock %}

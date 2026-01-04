@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="mb-2">确认培训项目信息</h1>
+  <p class="text-muted">
+    检测到待导入数据中有 <strong>{{ missing_projects|length }}</strong> 个项目尚未在系统中创建，共 <strong>{{ record_count }}</strong> 条记录待导入。
+    请为每个项目选择对应的分类，系统将自动创建这些项目。
+  </p>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-warning text-dark">
+    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>发现未创建的培训项目</h5>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>提示：</strong>系统在培训项目库中未找到以下项目，请为每个项目选择对应的分类。系统将自动创建这些项目并导入培训记录。
+    </div>
+
+    {% if not categories %}
+    <div class="alert alert-danger">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>错误：</strong>系统中尚未创建任何项目分类。请先前往<a href="{{ url_for('training.project_categories') }}" class="alert-link">项目分类管理</a>创建分类，然后再导入培训数据。
+    </div>
+    <div class="d-flex gap-3 mt-4">
+      <a href="{{ url_for('training.upload_daily_report') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>返回上传页面
+      </a>
+    </div>
+    {% else %}
+    <form method="POST" action="{{ url_for('training.confirm_projects') }}" id="confirmForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 5%">序号</th>
+              <th style="width: 40%">项目名称</th>
+              <th style="width: 55%">选择分类 <span class="text-danger">*</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for project_name in missing_projects %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>
+                <strong class="text-primary">{{ project_name }}</strong>
+              </td>
+              <td>
+                <select
+                  class="form-select"
+                  name="category_{{ project_name }}"
+                  required
+                >
+                  <option value="">-- 请选择分类 --</option>
+                  {% for category in categories %}
+                  <option value="{{ category.id }}">{{ category.name }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-warning mt-4">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>重要提示：</strong>
+        <ul class="mb-0 mt-2">
+          <li>选择分类后，系统将为每个项目自动创建记录并设置为"启用"状态</li>
+          <li>创建的项目将立即可用于后续的培训数据导入</li>
+          <li>如果不确定分类，建议先取消导入，完善项目库后再操作</li>
+          <li>项目创建后可在<a href="{{ url_for('training.projects') }}" class="alert-link">项目管理</a>中修改</li>
+        </ul>
+      </div>
+
+      <div class="d-flex gap-3 mt-4">
+        <button type="submit" name="action" value="confirm" class="btn btn-primary">
+          <i class="bi bi-check-circle me-2"></i>确认并导入
+        </button>
+        <button type="submit" name="action" value="cancel" class="btn btn-outline-secondary">
+          <i class="bi bi-x-circle me-2"></i>取消导入
+        </button>
+        <a href="{{ url_for('training.upload_daily_report') }}" class="btn btn-outline-info">
+          <i class="bi bi-arrow-left me-2"></i>返回上传页面
+        </a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-sm mt-4">
+  <div class="card-header">
+    <h6 class="mb-0"><i class="bi bi-lightbulb me-2"></i>如何避免此问题？</h6>
+  </div>
+  <div class="card-body">
+    <ol class="mb-0">
+      <li><strong>提前创建项目：</strong>在导入数据前，先在<a href="{{ url_for('training.projects') }}">项目管理</a>中创建好所有培训项目</li>
+      <li><strong>规范项目命名：</strong>确保Excel中的项目名称与系统中的项目名称完全一致</li>
+      <li><strong>使用批量导入：</strong>可使用项目管理页面的"批量添加"功能快速创建多个项目</li>
+      <li><strong>定期核查：</strong>定期核查项目库，确保所有常用项目都已创建</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+document.getElementById('confirmForm')?.addEventListener('submit', function(e) {
+    const action = e.submitter?.value;
+    if (action === 'confirm') {
+        // 检查是否所有项目都已选择分类
+        const selects = document.querySelectorAll('select[name^="category_"]');
+        let allSelected = true;
+        selects.forEach(select => {
+            if (!select.value) {
+                allSelected = false;
+                select.classList.add('is-invalid');
+            } else {
+                select.classList.remove('is-invalid');
+            }
+        });
+
+        if (!allSelected) {
+            e.preventDefault();
+            alert('请为所有项目选择分类');
+            return false;
+        }
+
+        return confirm(`确认要创建 ${selects.length} 个新项目并导入 {{ record_count }} 条培训记录吗？`);
+    }
+});
+</script>
+{% endblock %}

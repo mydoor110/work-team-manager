@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">导入日志审查</h5>
+    <small class="text-muted">查看所有数据导入操作记录</small>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">用户管理</a>
+    <a href="{{ url_for('admin.import_logs', module=module_filter, user=user_filter, start_date=start_date, end_date=end_date) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-sync-alt"></i> 刷新
+    </a>
+    <a href="{{ url_for('admin.export_import_logs', module=module_filter, user=user_filter, start_date=start_date, end_date=end_date) }}" class="btn btn-outline-success btn-sm">
+      <i class="fas fa-file-excel"></i> 导出Excel
+    </a>
+  </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="card shadow-sm border-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h6 class="text-muted mb-1">总操作次数</h6>
+            <h3 class="mb-0">{{ total_count }}</h3>
+          </div>
+          <div class="text-primary">
+            <i class="fas fa-database fa-2x"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% for stat in stats_by_module %}
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted mb-1">
+          {% if stat['module'] == 'personnel' %}人员管理
+          {% elif stat['module'] == 'performance' %}绩效管理
+          {% elif stat['module'] == 'training' %}培训管理
+          {% elif stat['module'] == 'safety' %}安全管理
+          {% else %}{{ stat['module'] }}{% endif %}
+        </h6>
+        <div class="d-flex justify-content-between align-items-end">
+          <div>
+            <h5 class="mb-0 text-success">{{ stat['success_rows'] or 0 }}</h5>
+            <small class="text-muted">成功导入</small>
+          </div>
+          <div class="text-end">
+            <small class="text-muted">操作 {{ stat['count'] }} 次</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- 筛选器 -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label">模块</label>
+        <select name="module" class="form-select form-select-sm">
+          <option value="">全部模块</option>
+          <option value="personnel" {% if module_filter == 'personnel' %}selected{% endif %}>人员管理</option>
+          <option value="performance" {% if module_filter == 'performance' %}selected{% endif %}>绩效管理</option>
+          <option value="training" {% if module_filter == 'training' %}selected{% endif %}>培训管理</option>
+          <option value="safety" {% if module_filter == 'safety' %}selected{% endif %}>安全管理</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">用户</label>
+        <input type="text" name="user" class="form-control form-control-sm" placeholder="用户名" value="{{ user_filter }}">
+      </div>
+
+      {# 使用统一的日期选择器组件 #}
+      {% set col_class = 'col-md-2' %}
+      {% set start_date_value = start_date %}
+      {% set end_date_value = end_date %}
+      {% set show_quick_buttons = true %}
+      {% set show_range_label = false %}
+      {% include 'components/date_filter.html' %}
+
+      <div class="col-md-4 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary btn-sm me-2">筛选</button>
+        <a href="{{ url_for('admin.import_logs') }}" class="btn btn-outline-secondary btn-sm">清除</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 日志列表 -->
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h6 class="card-title">导入日志记录 <span class="badge bg-secondary">{{ total_count }}</span></h6>
+
+    {% if logs %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 50px">ID</th>
+            <th>模块</th>
+            <th>操作用户</th>
+            <th>部门</th>
+            <th>文件名</th>
+            <th class="text-center">总计</th>
+            <th class="text-center">成功</th>
+            <th class="text-center">失败</th>
+            <th class="text-center">跳过</th>
+            <th>操作时间</th>
+            <th style="width: 100px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td><small>{{ log['id'] }}</small></td>
+            <td>
+              <span class="badge
+                {% if log['module'] == 'personnel' %}bg-info
+                {% elif log['module'] == 'performance' %}bg-primary
+                {% elif log['module'] == 'training' %}bg-success
+                {% elif log['module'] == 'safety' %}bg-warning text-dark
+                {% endif %}">
+                {{ log['module_display'] }}
+              </span>
+            </td>
+            <td>
+              <div>
+                <strong>{{ log['username'] }}</strong>
+                <br><small class="text-muted">{{ log['role_display'] }}</small>
+              </div>
+            </td>
+            <td>
+              {% if log['dept_name'] %}
+                <small>{{ log['dept_name'] }}</small>
+              {% else %}
+                <small class="text-muted">-</small>
+              {% endif %}
+            </td>
+            <td>
+              <small>{{ log['file_name'] or '-' }}</small>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-secondary">{{ log['total_rows'] }}</span>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-success">{{ log['success_rows'] }}</span>
+            </td>
+            <td class="text-center">
+              {% if log['failed_rows'] > 0 %}
+                <span class="badge bg-danger">{{ log['failed_rows'] }}</span>
+              {% else %}
+                <small class="text-muted">0</small>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if log['skipped_rows'] > 0 %}
+                <span class="badge bg-warning text-dark">{{ log['skipped_rows'] }}</span>
+              {% else %}
+                <small class="text-muted">0</small>
+              {% endif %}
+            </td>
+            <td><small>{{ log['created_at'] }}</small></td>
+            <td>
+              <a href="{{ url_for('admin.import_log_detail', log_id=log['id']) }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-eye"></i> 详情
+              </a>
+            </td>
+          </tr>
+          {% if log['error_message'] %}
+          <tr>
+            <td colspan="11" class="bg-light">
+              <small class="text-danger">
+                <i class="fas fa-exclamation-triangle"></i> {{ log['error_message'] }}
+              </small>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if total_pages > 1 %}
+    <nav aria-label="日志分页">
+      <ul class="pagination pagination-sm justify-content-center mb-0 mt-3">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('admin.import_logs', module=module_filter, user=user_filter, start_date=start_date, end_date=end_date, page=page-1) }}">上一页</a>
+        </li>
+
+        {% for p in range(1, total_pages + 1) %}
+          {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('admin.import_logs', module=module_filter, user=user_filter, start_date=start_date, end_date=end_date, page=p) }}">{{ p }}</a>
+            </li>
+          {% elif p == page - 3 or p == page + 3 %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('admin.import_logs', module=module_filter, user=user_filter, start_date=start_date, end_date=end_date, page=page+1) }}">下一页</a>
+        </li>
+      </ul>
+      <div class="text-center mt-2">
+        <small class="text-muted">第 {{ page }} / {{ total_pages }} 页，共 {{ total_count }} 条记录</small>
+      </div>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5">
+      <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+      <p class="text-muted">暂无导入日志记录</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 最近趋势 -->
+{% if recent_trend %}
+<div class="card shadow-sm mt-3">
+  <div class="card-body">
+    <h6 class="card-title">最近7天导入趋势</h6>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead class="table-light">
+          <tr>
+            <th>日期</th>
+            <th>导入次数</th>
+            <th>成功记录数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for trend in recent_trend %}
+          <tr>
+            <td>{{ trend['date'] }}</td>
+            <td><span class="badge bg-primary">{{ trend['import_count'] }}</span></td>
+            <td><span class="badge bg-success">{{ trend['total_success'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<!-- 引入日期筛选器库 -->
+<script src="{{ url_for('static', filename='js/date-filter.js') }}"></script>
+
+<script>
+// 初始化日期筛选器（增强表单提交体验）
+document.addEventListener('DOMContentLoaded', function() {
+  new DateFilterHelper({
+    startDateId: 'startDate',
+    endDateId: 'endDate',
+    showQuickButtons: true,
+    validateDates: true
+  });
+});
+</script>
+{% endblock %}

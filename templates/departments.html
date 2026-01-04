@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">部门管理</h5>
+    <small class="text-muted">管理组织架构和部门层级</small>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newDeptModal">
+    新建部门
+  </button>
+</div>
+
+<!-- 部门组织架构树 -->
+<div class="card shadow-sm">
+  <div class="card-header">
+    <h6 class="mb-0">组织架构</h6>
+  </div>
+  <div class="card-body">
+    {% if departments %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-light">
+          <tr>
+            <th>部门名称</th>
+            <th>层级</th>
+            <th>负责人</th>
+            <th>描述</th>
+            <th>子部门数</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dept in departments %}
+          <tr>
+            <td>
+              <!-- 显示层级缩进 -->
+              {% for i in range(dept.level - 1) %}
+                <span style="margin-left: 20px;"></span>
+              {% endfor %}
+              {% if dept.level > 1 %}
+                <i class="fas fa-level-up-alt text-muted me-1" style="transform: rotate(90deg);"></i>
+              {% endif %}
+              <strong>{{ dept.name }}</strong>
+              {% if dept.level == 1 %}
+                <span class="badge bg-primary ms-2">根部门</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-secondary">L{{ dept.level }}</span>
+            </td>
+            <td>
+              {% if dept.manager_name %}
+                <span class="text-primary">{{ dept.manager_name }}</span>
+              {% else %}
+                <small class="text-muted">未指定</small>
+              {% endif %}
+            </td>
+            <td>
+              <span class="text-truncate d-inline-block" style="max-width: 200px;"
+                    title="{{ dept.description or '' }}">
+                {{ dept.description or '-' }}
+              </span>
+            </td>
+            <td>
+              {% if dept.child_count > 0 %}
+                <span class="badge bg-info">{{ dept.child_count }}</span>
+              {% else %}
+                <span class="text-muted">0</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('departments.detail', dept_id=dept.id) }}"
+                   class="btn btn-outline-primary">详情</a>
+                {% if dept.id != 1 %}
+                <button class="btn btn-outline-success"
+                        onclick="createSubDept({{ dept.id }}, '{{ dept.name }}')">
+                  添加下级
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-4 text-muted">
+      <i class="fas fa-sitemap fa-3x mb-3"></i>
+      <p>暂无部门数据</p>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newDeptModal">
+        创建第一个部门
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 新建部门模态框 -->
+<div class="modal fade" id="newDeptModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">新建部门</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        <div class="modal-body">
+          <input type="hidden" name="action" value="create">
+          <div class="mb-3">
+            <label class="form-label">部门名称 *</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">上级部门</label>
+            <select name="parent_id" class="form-select" id="parentDeptSelect">
+              <option value="">无（作为顶级部门）</option>
+              {% for dept in departments %}
+              <option value="{{ dept.id }}">
+                {% for i in range(dept.level - 1) %}
+                  &#8194;&#8194;
+                {% endfor %}
+                {{ dept.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">部门负责人</label>
+            <select name="manager_user_id" class="form-select">
+              <option value="">请选择负责人</option>
+              {% for user in users %}
+              <option value="{{ user.id }}">{{ user.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">部门描述</label>
+            <textarea name="description" class="form-control" rows="3"
+                      placeholder="描述部门职能和职责"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">创建部门</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function createSubDept(parentId, parentName) {
+  // 打开新建部门模态框，并预设上级部门
+  const modal = new bootstrap.Modal(document.getElementById('newDeptModal'));
+  document.getElementById('parentDeptSelect').value = parentId;
+  document.querySelector('#newDeptModal .modal-title').textContent = `新建 ${parentName} 的下级部门`;
+  modal.show();
+}
+
+// 重置模态框
+document.getElementById('newDeptModal').addEventListener('hidden.bs.modal', function() {
+  this.querySelector('form').reset();
+  this.querySelector('.modal-title').textContent = '新建部门';
+});
+</script>
+{% endblock %}
