@@ -1556,7 +1556,7 @@ function displayPreviewResults(result) {
                 <td>
                     等级：<span class="badge bg-secondary">${newP.grade}</span><br>
                     系数：${newP.coefficient.toFixed(2)}<br>
-                    得分：<strong class="${diffClass}">${newP.final_score.toFixed(1)} ${diffIcon}${Math.abs(diff).toFixed(1)}</strong>
+                    得分：<strong class="${diffClass}">${newP.final_score.toFixed(1)}${diff !== 0 ? ` ${diffIcon}${Math.abs(diff).toFixed(1)}` : ''}</strong>
                 </td>
             </tr>
         `;
@@ -1585,7 +1585,7 @@ function displayPreviewResults(result) {
                     违规次数：${newS.violations_count}次<br>
                     维度A（频率）：${newS.dimension_a.toFixed(1)}分<br>
                     维度B（严重性）：${newS.dimension_b.toFixed(1)}分<br>
-                    得分：<strong class="${diffClass}">${newS.final_score.toFixed(1)} ${diffIcon}${Math.abs(diff).toFixed(1)}</strong>
+                    得分：<strong class="${diffClass}">${newS.final_score.toFixed(1)}${diff !== 0 ? ` ${diffIcon}${Math.abs(diff).toFixed(1)}` : ''}</strong>
                 </td>
             </tr>
         `;
@@ -1612,7 +1612,7 @@ function displayPreviewResults(result) {
                     培训记录：${newT.records_count}次（合格${newT.qualified_count}次）<br>
                     平均分：${newT.avg_score.toFixed(1)}分<br>
                     惩罚系数：${newT.penalty_coefficient.toFixed(2)}<br>
-                    得分：<strong class="${diffClass}">${newT.final_score.toFixed(1)} ${diffIcon}${Math.abs(diff).toFixed(1)}</strong>
+                    得分：<strong class="${diffClass}">${newT.final_score.toFixed(1)}${diff !== 0 ? ` ${diffIcon}${Math.abs(diff).toFixed(1)}` : ''}</strong>
                 </td>
             </tr>
         `;
@@ -1646,7 +1646,7 @@ function displayPreviewResults(result) {
                 <td>
                     ${newL.trend_description}<br>
                     成长类型：<span class="badge bg-${newTierColor}">${newL.tier}</span><br>
-                    得分：<strong class="${diffClass}">${newL.final_score.toFixed(1)} ${diffIcon}${Math.abs(diff).toFixed(1)}</strong>
+                    得分：<strong class="${diffClass}">${newL.final_score.toFixed(1)}${diff !== 0 ? ` ${diffIcon}${Math.abs(diff).toFixed(1)}` : ''}</strong>
                 </td>
             </tr>
         `;

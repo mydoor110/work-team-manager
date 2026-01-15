@@ -213,7 +213,6 @@ def calculate_performance_score_period(grade_list: List[str], grade_dates: Optio
 
     if use_time_decay:
         from datetime import datetime
-        from dateutil.relativedelta import relativedelta
 
         now = datetime.now()
         decay_months_threshold = time_decay.get('decay_months', 6)
@@ -749,31 +748,33 @@ def calculate_learning_ability_monthly(score_curr: float, score_prev: float) -> 
     return {
         'learning_score': round(learning_score, 1),
         'delta': round(delta, 1),
+        'slope': 0,  # 月度模式无斜率概念，设为0
         'status_color': status_color,
         'alert_tag': alert_tag,
         'tier': tier
     }
 
 
-def calculate_learning_ability_longterm(score_list: List[float], config: dict = None) -> Dict:
+def calculate_learning_ability_longterm(score_list: List[float], config: dict = None, current_three_dim_score: float = None) -> Dict:
     """
-    学习能力评分 - 年度/长周期模式 (Algorithm B: Long-Term Trend)（参数化版本）
+    学习能力评分 - 基于线性回归趋势分析
 
-    通过最小二乘法线性回归判断全年成长斜率，消除单月波动噪音。
+    通过最小二乘法线性回归判断成长趋势，计算学习能力分数
 
     Args:
-        score_list: 过去N个月的综合得分列表，例如 [85, 86, 88, ..., 92]
+        score_list: 过去N个月的三维综合分列表，例如 [85, 86, 88, ..., 92]
                    最少需要2个月数据
         config: 算法配置（可选，默认从数据库读取）
+        current_three_dim_score: 当前周期的三维综合分（可选，保留用于向后兼容）
 
     Returns:
         {
             'learning_score': 学习能力分数 (0-100),
             'slope': 趋势斜率 k (正数表示上升，负数表示下降),
-            'average_score': 年均分,
+            'average_score': 历史平均分,
             'status_color': 状态颜色,
             'alert_tag': 警示标签,
-            'tier': 评级 (潜力股/稳健型/懈怠型)
+            'tier': 评级（上升/稳定/下降）
         }
     """
     import numpy as np
@@ -796,13 +797,12 @@ def calculate_learning_ability_longterm(score_list: List[float], config: dict = 
             'learning_score': 0,
             'slope': 0,
             'average_score': 0,
-            'status_color': 'GREEN',
+            'status_color': 'GRAY',
             'alert_tag': '⚪ 数据不足',
             'tier': '数据不足'
         }
 
-    # Step 2: 计算线性回归斜率 (最小二乘法)
-    # y = k*x + b，其中 x 是月份索引 (0, 1, 2, ..., n-1)，y 是得分
+    # Step 2: 计算线性回归斜率（最小二乘法）
     n = len(score_list)
     x = np.arange(n)
     y = np.array(score_list)
@@ -815,17 +815,14 @@ def calculate_learning_ability_longterm(score_list: List[float], config: dict = 
 
     k = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x) if (n * sum_x2 - sum_x * sum_x) != 0 else 0
 
-    # Step 3: 计算年均分
+    # Step 3: 计算平均分
     average_score = float(np.mean(y))
 
-    # Step 4: 计算长周期成长分
-    # 基准分为年均分，斜率乘以放大因子
+    # Step 4: 读取配置参数（含 None 检查）
     slope_amplifier = learning_config.get('slope_amplifier', 10)
     if slope_amplifier is None:
         slope_amplifier = 10
-    learning_score = average_score + (k * slope_amplifier)
 
-    # Step 5: 年度定级逻辑（使用配置参数）
     potential_threshold = learning_config.get('potential_threshold', 0.5)
     if potential_threshold is None:
         potential_threshold = 0.5
@@ -838,34 +835,31 @@ def calculate_learning_ability_longterm(score_list: List[float], config: dict = 
     if decline_penalty is None:
         decline_penalty = 0.8
 
-    tier = '稳健型'
-    status_color = 'GREEN'
-    alert_tag = '✅ 平稳发展'
+    # Step 5: 计算最终得分（简化版：历史平均分 + 趋势加成）
+    base_score = average_score
+    trend_bonus = k * slope_amplifier
+    final_score = base_score + trend_bonus
 
+    # 限制范围
+    final_score = max(0, min(100, final_score))
+
+    # Step 6: 根据斜率判断趋势和状态
     if k > potential_threshold:
-        # 潜力股 (分数显著提升)
-        tier = '潜力股'
-        status_color = 'GOLD'
-        alert_tag = f'⭐ 持续进步 (斜率+{k:.2f})'
-        learning_score = 100  # 直接给满分
-    elif decline_threshold <= k <= potential_threshold:
-        # 稳健型 (平稳)
-        tier = '稳健型'
+        tier = '📈 上升趋势'
         status_color = 'GREEN'
-        alert_tag = f'✅ 保持平稳 (斜率{k:.2f})'
-        learning_score = average_score
-    else:  # k < decline_threshold
-        # 懈怠型 (滑坡)
-        tier = '懈怠型'
+        alert_tag = f'表现上升（平均分{average_score:.1f}，斜率{k:.2f}）'
+    elif k >= decline_threshold:
+        tier = '➡️ 稳定表现'
+        status_color = 'BLUE'
+        alert_tag = f'表现稳定（平均分{average_score:.1f}，斜率{k:.2f}）'
+    else:
+        tier = '📉 下降趋势'
         status_color = 'ORANGE'
-        alert_tag = f'⚠️ 持续下滑 (斜率{k:.2f})'
-        learning_score = average_score * decline_penalty
+        alert_tag = f'表现下滑（平均分{average_score:.1f}，斜率{k:.2f}）'
 
-    # 限制分数范围
-    learning_score = max(0, min(100, learning_score))
-
+    # Step 7: 返回结果
     return {
-        'learning_score': round(learning_score, 1),
+        'learning_score': round(final_score, 1),
         'slope': round(k, 3),
         'average_score': round(average_score, 1),
         'status_color': status_color,
@@ -2182,22 +2176,36 @@ def api_students_list():
     score_weights = algo_config['comprehensive']['score_weights']
     key_personnel_config = algo_config['key_personnel']
 
+    # 兼容 sqlite3.Row 和 dict 两种类型的辅助函数
+    def safe_get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        else:
+            try:
+                return obj[key] if obj[key] is not None else default
+            except (KeyError, IndexError):
+                return default
+
     # 使用现有的 list_personnel() 函数获取权限过滤后的人员列表
     rows = list_personnel()
 
     # 应用部门和岗位筛选
     if department_filter:
-        rows = [r for r in rows if r.get('department_name') == department_filter]
+        rows = [r for r in rows if safe_get(r, 'department_name') == department_filter]
 
     if position_filter:
         position_filter_lower = position_filter.lower()
-        rows = [r for r in rows if position_filter_lower in (r.get('position') or '').lower()]
+        rows = [r for r in rows if position_filter_lower in (safe_get(r, 'position') or '').lower()]
 
     students = []
     for row in rows:
-        emp_no = row.get('emp_no')
-        emp_name = row.get('name')
-        dept_id = row.get('department_id')
+        emp_no = safe_get(row, 'emp_no')
+        emp_name = safe_get(row, 'name')
+        dept_id = safe_get(row, 'department_id')
+
+        # 计算取证年限（用于培训和稳定性算法）
+        cert_date = safe_get(row, 'certification_date')
+        cert_years = calculate_years_from_date(cert_date) if cert_date else None
 
         # 获取部门名称
         if dept_id:
@@ -2245,7 +2253,7 @@ def api_students_list():
             duration_days = 30
 
         # 使用新的评分算法
-        training_result = calculate_training_score_with_penalty(training_records_list, duration_days)
+        training_result = calculate_training_score_with_penalty(training_records_list, duration_days, cert_years, algo_config)
         training_score = training_result['radar_score']
 
         # 2. 安全意识（使用双轨评分模型）
@@ -2303,7 +2311,7 @@ def api_students_list():
                 months_active = 1
 
         # 使用双轨评分模型
-        safety_result = calculate_safety_score_dual_track(violations_list, months_active)
+        safety_result = calculate_safety_score_dual_track(violations_list, months_active, algo_config)
         safety_score = safety_result['final_score']
         safety_status_color = safety_result['status_color']
         safety_alert_tag = safety_result['alert_tag']
@@ -2336,12 +2344,13 @@ def api_students_list():
                 score, grade, year, month = perf_rows[0]
                 raw_score = float(score) if score else 95
                 grade = grade if grade else 'B+'
-                perf_result = calculate_performance_score_monthly(grade, raw_score)
+                perf_result = calculate_performance_score_monthly(grade, raw_score, algo_config)
                 performance_score = perf_result['radar_value']
             else:
-                # 周期加权算法
+                # 周期加权算法（带时间衰减）
                 grade_list = [row[1] if row[1] else 'B+' for row in perf_rows]
-                perf_result = calculate_performance_score_period(grade_list)
+                grade_dates = [f"{row[2]}-{row[3]:02d}" for row in perf_rows]  # 构建日期列表
+                perf_result = calculate_performance_score_period(grade_list, grade_dates, algo_config)
                 performance_score = perf_result['radar_value']
         else:
             # 没有绩效数据
@@ -2376,7 +2385,8 @@ def api_students_list():
                 if prev_perf_row:
                     prev_perf_score = calculate_performance_score_monthly(
                         prev_perf_row[1] if prev_perf_row[1] else 'B+',
-                        float(prev_perf_row[0]) if prev_perf_row[0] else 95
+                        float(prev_perf_row[0]) if prev_perf_row[0] else 95,
+                        algo_config
                     )['radar_value']
                 else:
                     prev_perf_score = 0
@@ -2392,7 +2402,7 @@ def api_students_list():
                     score = extract_score_from_assessment(safety_row[0])
                     if score > 0:
                         prev_violations.append(float(score))
-                prev_safety_result = calculate_safety_score_dual_track(prev_violations, months_active=1)
+                prev_safety_result = calculate_safety_score_dual_track(prev_violations, months_active=1, config=algo_config)
                 prev_safety_score = prev_safety_result['final_score']
 
 
@@ -2402,8 +2412,8 @@ def api_students_list():
                     WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
                 """, [emp_no, prev_date])
                 prev_training_rows = cur.fetchall()
-                prev_training_result = calculate_training_score_with_penalty(prev_training_rows, duration_days=30)
-                prev_training_score = prev_training_result['radar_value']
+                prev_training_result = calculate_training_score_with_penalty(prev_training_rows, duration_days=30, cert_years=cert_years, config=algo_config)
+                prev_training_score = prev_training_result['radar_score']  # 修复：使用正确的键名
 
                 # 计算上月综合分
                 previous_comprehensive = (
@@ -2418,66 +2428,109 @@ def api_students_list():
                 # 异常情况：使用当前分作为上月分（视为无变化）
                 learning_result = calculate_learning_ability_monthly(current_comprehensive, current_comprehensive)
         else:
-            # 长周期模式：使用简化算法（只取最近2个月对比）
+            # 长周期模式：查询过去N个月的综合分列表（与右侧API一致）
             try:
+                # 获取起止月份
                 if start_date and end_date:
                     start_dt = datetime.strptime(start_date + '-01', '%Y-%m-%d')
                     end_dt = datetime.strptime(end_date + '-01', '%Y-%m-%d')
                 else:
                     end_dt = datetime.now()
-                    start_dt = end_dt - timedelta(days=60)
+                    start_dt = end_dt - timedelta(days=365)
 
-                # 获取第一个月数据
-                first_month = start_dt.strftime('%Y-%m')
-                cur.execute("""
-                    SELECT score, grade FROM performance_records
-                    WHERE emp_no = ? AND (year || '-' || printf('%02d', month)) = ?
-                """, [emp_no, first_month])
-                first_perf_row = cur.fetchone()
-                if first_perf_row:
-                    first_perf_score = calculate_performance_score_monthly(
-                        first_perf_row[1] if first_perf_row[1] else 'B+',
-                        float(first_perf_row[0]) if first_perf_row[0] else 95
-                    )['radar_value']
+                # 构建月份列表
+                month_list = []
+                current_month = start_dt
+                while current_month <= end_dt:
+                    month_list.append(current_month.strftime('%Y-%m'))
+                    # 移动到下个月
+                    current_month = (current_month.replace(day=1) + timedelta(days=32)).replace(day=1)
+
+                # 循环查询每月三维分
+                score_list = []
+                for month_str in month_list:
+                    # 查询该月绩效
+                    cur.execute("""
+                        SELECT score, grade FROM performance_records
+                        WHERE emp_no = ? AND (year || '-' || printf('%02d', month)) = ?
+                    """, [emp_no, month_str])
+                    month_perf = cur.fetchone()
+                    if month_perf:
+                        month_perf_score = calculate_performance_score_monthly(
+                            month_perf[1] if month_perf[1] else 'B+',
+                            float(month_perf[0]) if month_perf[0] else 95,
+                            algo_config
+                        )['radar_value']
+                    else:
+                        month_perf_score = 0
+
+                    # 查询该月安全
+                    cur.execute("""
+                        SELECT assessment FROM safety_inspection_records
+                        WHERE inspected_person = ? AND strftime('%Y-%m', inspection_date) = ?
+                    """, [emp_name, month_str])
+                    month_safety_rows = cur.fetchall()
+                    if month_safety_rows:
+                        month_violations = []
+                        for safety_row in month_safety_rows:  # 修复：避免覆盖外层row变量
+                            score = extract_score_from_assessment(safety_row[0])
+                            if score > 0:
+                                month_violations.append(float(score))
+                        month_safety_result = calculate_safety_score_dual_track(month_violations, 1, algo_config)
+                        month_safety_score = month_safety_result['final_score']
+                    else:
+                        month_safety_score = 0
+
+                    # 查询该月培训
+                    cur.execute("""
+                        SELECT score, is_qualified, is_disqualified, training_date FROM training_records
+                        WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
+                    """, [emp_no, month_str])
+                    month_training_rows = cur.fetchall()
+                    if month_training_rows:
+                        month_training_result = calculate_training_score_with_penalty(
+                            month_training_rows,
+                            30,  # 单月30天
+                            cert_years,
+                            algo_config
+                        )
+                        month_training_score = month_training_result['radar_score']
+                    else:
+                        month_training_score = 0
+
+                    # 计算该月综合分（使用配置权重）
+                    month_comprehensive = (
+                        month_perf_score * score_weights.get('performance', 0.35) +
+                        month_safety_score * score_weights.get('safety', 0.30) +
+                        month_training_score * score_weights.get('training', 0.20)
+                    )
+                    score_list.append(month_comprehensive)
+
+                # 使用长周期算法
+                if len(score_list) >= 2:
+                    print(f"DEBUG [api_students_list-员工{emp_no}]: 使用长周期算法，score_list长度={len(score_list)}, current_comprehensive={current_comprehensive:.1f}")
+                    learning_result = calculate_learning_ability_longterm(
+                        score_list,
+                        algo_config,
+                        current_three_dim_score=current_comprehensive
+                    )
+                    print(f"DEBUG [api_students_list-员工{emp_no}]: 学习能力分数={learning_result['learning_score']}")
                 else:
-                    first_perf_score = 0
-
-                cur.execute("""
-                    SELECT category, deduction_points, inspection_date
-                    FROM safety_records
-                    WHERE inspected_person = ? AND strftime('%Y-%m', inspection_date) = ?
-                    ORDER BY inspection_date
-                """, [emp_name, first_month])
-                first_safety_rows = cur.fetchall()
-                if first_safety_rows:
-                    first_safety_result = calculate_safety_score_dual_track(first_safety_rows)
-                    first_safety_score = first_safety_result['comprehensive_score']
-                else:
-                    first_safety_score = 0
-
-                cur.execute("""
-                    SELECT score, is_qualified FROM training_records
-                    WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
-                """, [emp_no, first_month])
-                first_training_rows = cur.fetchall()
-                if first_training_rows:
-                    first_training_result = calculate_training_score_with_penalty(first_training_rows)
-                    first_training_score = first_training_result['radar_value']
-                else:
-                    first_training_score = 0
-
-                # 计算第一个月综合分
-                first_comprehensive = (
-                    first_perf_score * 0.35 / (0.35 + 0.30 + 0.20) +
-                    first_safety_score * 0.30 / (0.35 + 0.30 + 0.20) +
-                    first_training_score * 0.20 / (0.35 + 0.30 + 0.20)
-                ) * 100
-
-                # 使用月度算法对比首末月
-                learning_result = calculate_learning_ability_monthly(current_comprehensive, first_comprehensive)
+                    # 数据不足，使用月度算法
+                    print(f"DEBUG [api_students_list-员工{emp_no}]: 数据不足(len={len(score_list)})，降级到月度算法")
+                    learning_result = calculate_learning_ability_monthly(
+                        current_comprehensive,
+                        current_comprehensive
+                    )
             except Exception as e:
-                # 异常情况
-                learning_result = calculate_learning_ability_monthly(current_comprehensive, current_comprehensive)
+                # 异常情况：使用当前分
+                print(f"ERROR [api_students_list-员工{emp_no}]: 学习能力计算异常 - {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                learning_result = calculate_learning_ability_monthly(
+                    current_comprehensive,
+                    current_comprehensive
+                )
 
         # 提取学习能力分值
         if learning_result:
@@ -2485,17 +2538,129 @@ def api_students_list():
         else:
             learning_score = 0
 
-        # 5. 稳定性（工作年限）
-        entry_date = row.get('entry_date')
-        if entry_date:
-            try:
-                entry = datetime.strptime(entry_date, '%Y-%m-%d')
-                years = (datetime.now() - entry).days / 365
-                stability_score = min(100, years * 33.3)
-            except:
+        # 5. 稳定性（使用完整算法：资历60% + 表现稳定性40%）
+        entry_date = safe_get(row, 'entry_date')
+        birth_date = safe_get(row, 'birth_date')
+        work_start_date = safe_get(row, 'work_start_date')
+        cert_date = safe_get(row, 'certification_date')
+        solo_date = safe_get(row, 'solo_driving_date')
+
+        try:
+            # 重新定义日期范围以避免作用域问题
+            if start_date and end_date:
+                start_dt_stability = datetime.strptime(start_date + '-01', '%Y-%m-%d')
+                end_dt_stability = datetime.strptime(end_date + '-01', '%Y-%m-%d')
+            else:
+                # 如果没有筛选，使用过去12个月
+                end_dt_stability = datetime.now()
+                start_dt_stability = end_dt_stability - timedelta(days=365)
+
+            # 构建月份列表
+            month_list = []
+            current_month = start_dt_stability.replace(day=1)
+            while current_month <= end_dt_stability:
+                month_list.append(current_month.strftime('%Y-%m'))
+                # 移动到下个月
+                if current_month.month == 12:
+                    current_month = current_month.replace(year=current_month.year + 1, month=1)
+                else:
+                    current_month = current_month.replace(month=current_month.month + 1)
+
+            # 查询每个月的三维分数
+            historical_scores = {
+                'performance': [],
+                'safety': [],
+                'training': []
+            }
+
+            for month_str in month_list:
+                # 查询该月绩效分
+                cur.execute("""
+                    SELECT score, grade FROM performance_records
+                    WHERE emp_no = ? AND (year || '-' || printf('%02d', month)) = ?
+                """, [emp_no, month_str])
+                month_perf_row = cur.fetchone()
+                if month_perf_row:
+                    month_perf_score = calculate_performance_score_monthly(
+                        month_perf_row[1] if month_perf_row[1] else 'B+',
+                        float(month_perf_row[0]) if month_perf_row[0] else 95,
+                        algo_config
+                    )['radar_value']
+                    historical_scores['performance'].append(month_perf_score)
+
+                # 查询该月安全分
+                cur.execute("""
+                    SELECT assessment, inspection_date
+                    FROM safety_inspection_records
+                    WHERE inspected_person = ? AND strftime('%Y-%m', inspection_date) = ?
+                    ORDER BY inspection_date
+                """, [emp_name, month_str])
+                month_safety_rows = cur.fetchall()
+                if month_safety_rows:
+                    violations = []
+                    for safety_row in month_safety_rows:  # 修复：避免覆盖外层row变量
+                        score = extract_score_from_assessment(safety_row[0])
+                        if score > 0:
+                            violations.append(float(score))
+
+                    if violations:
+                        month_safety_result = calculate_safety_score_dual_track(
+                            violations,
+                            1,
+                            algo_config
+                        )
+                        historical_scores['safety'].append(month_safety_result['final_score'])
+
+                # 查询该月培训分
+                cur.execute("""
+                    SELECT score, is_qualified, is_disqualified, training_date FROM training_records
+                    WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
+                """, [emp_no, month_str])
+                month_training_rows = cur.fetchall()
+                if month_training_rows:
+                    month_training_result = calculate_training_score_with_penalty(
+                        month_training_rows,
+                        30,
+                        cert_years,
+                        algo_config
+                    )
+                    historical_scores['training'].append(month_training_result['radar_score'])
+
+            # 调用综合稳定性算法
+            print(f"DEBUG [api_students_list-员工{emp_no}]: 稳定性算法参数:")
+            print(f"  - birth_date={birth_date}, work_start_date={work_start_date}")
+            print(f"  - entry_date={entry_date}, cert_date={cert_date}, solo_date={solo_date}")
+            print(f"  - historical_scores: perf={len(historical_scores['performance'])}条, safety={len(historical_scores['safety'])}条, training={len(historical_scores['training'])}条")
+            stability_result = calculate_stability_score(
+                birth_date=birth_date,
+                work_start_date=work_start_date,
+                entry_date=entry_date,
+                certification_date=cert_date,
+                solo_driving_date=solo_date,
+                historical_scores=historical_scores if any(historical_scores.values()) else None,
+                config=algo_config
+            )
+            stability_score = stability_result['stability_score']
+            print(f"DEBUG [api_students_list-员工{emp_no}]: 稳定性分数={stability_score:.1f}（综合算法）")
+            print(f"  - 资历分={stability_result['seniority_score']:.1f}, 波动分={stability_result['volatility_score']:.1f}")
+            print(f"  - 波动系数={stability_result['metrics']['volatility']:.2f}")
+        except Exception as e:
+            # 异常情况：使用简单计算作为降级方案
+            print(f"ERROR [api_students_list-员工{emp_no}]: 稳定性算法异常 - {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            if entry_date:
+                try:
+                    entry = datetime.strptime(entry_date, '%Y-%m-%d')
+                    years = (datetime.now() - entry).days / 365
+                    stability_score = min(100, years * 33.3)
+                    print(f"DEBUG [api_students_list-员工{emp_no}]: 降级到简单算法，稳定性={stability_score:.1f}（入职{years:.1f}年）")
+                except:
+                    stability_score = 50
+                    print(f"DEBUG [api_students_list-员工{emp_no}]: 降级失败，使用默认值50")
+            else:
                 stability_score = 50
-        else:
-            stability_score = 50
+                print(f"DEBUG [api_students_list-员工{emp_no}]: 无入职日期，使用默认值50")
 
         # 综合评分（加权平均 - 使用配置权重）
         comprehensive_score = round(
@@ -2519,9 +2684,9 @@ def api_students_list():
             'emp_no': emp_no,
             'name': emp_name,
             'department_name': dept_name,
-            'position': row.get('position'),
+            'position': safe_get(row, 'position'),
             'comprehensive_score': comprehensive_score,
-            'is_key_personnel': is_key_personnel,
+            'is_key_personnel': bool(is_key_personnel),  # 显式转换为JSON兼容的布尔值
             'safety_status_color': safety_status_color,
             'safety_alert_tag': safety_alert_tag
         })
@@ -2577,11 +2742,17 @@ def api_comprehensive_profile(emp_no):
     start_date = request.args.get('start_date')  # 格式：YYYY-MM
     end_date = request.args.get('end_date')      # 格式：YYYY-MM
 
+    # DEBUG: 打印接收到的日期参数
+    print(f"DEBUG [comprehensive-profile]: 原始参数 - start_date='{start_date}', end_date='{end_date}'")
+    print(f"DEBUG [comprehensive-profile]: 参数类型 - start_date type={type(start_date)}, end_date type={type(end_date)}")
+    print(f"DEBUG [comprehensive-profile]: 参数布尔值 - bool(start_date)={bool(start_date)}, bool(end_date)={bool(end_date)}")
+
     # 如果没有指定日期，默认使用当月
     if not start_date and not end_date:
         current_month = datetime.now().strftime('%Y-%m')
         start_date = current_month
         end_date = current_month
+        print(f"DEBUG [comprehensive-profile]: 无日期参数，使用默认当月: {current_month}")
 
     # 2. 培训能力分析（使用高级评分算法 - 包含毒性惩罚和动态年化）
     training_query = """
@@ -2629,7 +2800,7 @@ def api_comprehensive_profile(emp_no):
         duration_days = 30
 
     # 使用新的评分算法
-    training_result = calculate_training_score_with_penalty(training_records, duration_days)
+    training_result = calculate_training_score_with_penalty(training_records, duration_days, cert_years, algo_config)
     training_score = training_result['radar_score']
     training_status_color = training_result['status_color']
     training_alert_tag = training_result['alert_tag']
@@ -2703,7 +2874,7 @@ def api_comprehensive_profile(emp_no):
             months_active = 1
 
     # 使用双轨评分模型
-    safety_result = calculate_safety_score_dual_track(violations_list, months_active)
+    safety_result = calculate_safety_score_dual_track(violations_list, months_active, algo_config)
     safety_score = safety_result['final_score']
     safety_status_color = safety_result['status_color']
     safety_alert_tag = safety_result['alert_tag']
@@ -2713,6 +2884,7 @@ def api_comprehensive_profile(emp_no):
     # 4. 绩效能力分析（使用双算法系统）
     # 判断是月度还是周期（使用前面已经设置的 start_date 和 end_date）
     is_monthly = (start_date == end_date) if start_date and end_date else True
+    print(f"DEBUG [comprehensive-profile]: is_monthly={is_monthly}, start_date={start_date}, end_date={end_date}")
 
     # 构建绩效查询
     perf_query = """
@@ -2740,16 +2912,17 @@ def api_comprehensive_profile(emp_no):
             score, grade, year, month = perf_rows[0]
             raw_score = float(score) if score else 95
             grade = grade if grade else 'B+'
-            perf_result = calculate_performance_score_monthly(grade, raw_score)
+            perf_result = calculate_performance_score_monthly(grade, raw_score, algo_config)
             performance_score = perf_result['radar_value']
             performance_status_color = perf_result['status_color']
             performance_alert_tag = perf_result['alert_tag']
             performance_display_label = perf_result['display_label']
             performance_mode = 'MONTHLY'
         else:
-            # 周期加权算法
+            # 周期加权算法（带时间衰减）
             grade_list = [row[1] if row[1] else 'B+' for row in perf_rows]
-            perf_result = calculate_performance_score_period(grade_list)
+            grade_dates = [f"{row[2]}-{row[3]:02d}" for row in perf_rows]  # 构建日期列表
+            perf_result = calculate_performance_score_period(grade_list, grade_dates, algo_config)
             performance_score = perf_result['radar_value']
             performance_status_color = perf_result['status_color']
             performance_alert_tag = perf_result['alert_tag']
@@ -2777,6 +2950,10 @@ def api_comprehensive_profile(emp_no):
     previous_comprehensive = 0
     learning_result = None
 
+    # DEBUG: 打印学习能力计算模式
+    print(f"DEBUG [学习能力]: is_monthly={is_monthly}, start_date='{start_date}', end_date='{end_date}'")
+    print(f"DEBUG [学习能力]: 条件判断 - (is_monthly and start_date) = {is_monthly and start_date}")
+
     if is_monthly and start_date:
         # 月度模式：计算上月同期数据
         try:
@@ -2793,7 +2970,8 @@ def api_comprehensive_profile(emp_no):
             if prev_perf_row:
                 prev_perf_score = calculate_performance_score_monthly(
                     prev_perf_row[1] if prev_perf_row[1] else 'B+',
-                    float(prev_perf_row[0]) if prev_perf_row[0] else 95
+                    float(prev_perf_row[0]) if prev_perf_row[0] else 95,
+                    algo_config
                 )['radar_value']
             else:
                 prev_perf_score = 0
@@ -2812,7 +2990,7 @@ def api_comprehensive_profile(emp_no):
                     prev_violations.append(float(score))
 
             # 月度模式，周期为1个月
-            prev_safety_result = calculate_safety_score_dual_track(prev_violations, months_active=1)
+            prev_safety_result = calculate_safety_score_dual_track(prev_violations, months_active=1, config=algo_config)
             prev_safety_score = prev_safety_result['final_score']
 
             # 查询上月培训
@@ -2822,8 +3000,8 @@ def api_comprehensive_profile(emp_no):
             """, [emp_no, prev_date])
             prev_training_rows = cur.fetchall()
             # 月度模式，周期30天
-            prev_training_result = calculate_training_score_with_penalty(prev_training_rows, duration_days=30)
-            prev_training_score = prev_training_result['radar_value']
+            prev_training_result = calculate_training_score_with_penalty(prev_training_rows, duration_days=30, cert_years=cert_years, config=algo_config)
+            prev_training_score = prev_training_result['radar_score']  # 修复：使用正确的键名
 
 
             # 计算上月综合分
@@ -2857,9 +3035,12 @@ def api_comprehensive_profile(emp_no):
                 current_month = current_month + timedelta(days=32)
                 current_month = current_month.replace(day=1)
 
+            print(f"DEBUG: 构建了 {len(month_list)} 个月份: {month_list}")
+
             # 查询每个月的三维分数并计算综合分
             score_list = []
             for month_str in month_list:
+                print(f"DEBUG: 处理月份 {month_str}")
                 # 绩效
                 cur.execute("""
                     SELECT score, grade FROM performance_records
@@ -2869,53 +3050,92 @@ def api_comprehensive_profile(emp_no):
                 if month_perf_row:
                     month_perf_score = calculate_performance_score_monthly(
                         month_perf_row[1] if month_perf_row[1] else 'B+',
-                        float(month_perf_row[0]) if month_perf_row[0] else 95
+                        float(month_perf_row[0]) if month_perf_row[0] else 95,
+                        algo_config
                     )['radar_value']
+                    print(f"  - 绩效: {month_perf_score} (grade={month_perf_row[1]}, score={month_perf_row[0]})")
                 else:
                     month_perf_score = 0
+                    print(f"  - 绩效: 无数据")
 
                 # 安全
                 cur.execute("""
-                    SELECT category, deduction_points, inspection_date
-                    FROM safety_records
+                    SELECT assessment, inspection_date
+                    FROM safety_inspection_records
                     WHERE inspected_person = ? AND strftime('%Y-%m', inspection_date) = ?
                     ORDER BY inspection_date
                 """, [emp_name, month_str])
                 month_safety_rows = cur.fetchall()
                 if month_safety_rows:
-                    month_safety_result = calculate_safety_score_dual_track(month_safety_rows)
-                    month_safety_score = month_safety_result['comprehensive_score']
+                    # 提取扣分数值
+                    violations = []
+                    for row in month_safety_rows:
+                        score = extract_score_from_assessment(row[0])
+                        if score > 0:
+                            violations.append(float(score))
+
+                    if violations:
+                        month_safety_result = calculate_safety_score_dual_track(
+                            violations,
+                            1,
+                            algo_config
+                        )
+                        month_safety_score = month_safety_result['final_score']
+                        print(f"  - 安全: {month_safety_score} ({len(violations)}条违规)")
+                    else:
+                        month_safety_score = 0
+                        print(f"  - 安全: 0 (有记录但无扣分)")
                 else:
                     month_safety_score = 0
+                    print(f"  - 安全: 无数据")
 
                 # 培训
                 cur.execute("""
-                    SELECT score, is_qualified FROM training_records
+                    SELECT score, is_qualified, is_disqualified, training_date FROM training_records
                     WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
                 """, [emp_no, month_str])
                 month_training_rows = cur.fetchall()
                 if month_training_rows:
-                    month_training_result = calculate_training_score_with_penalty(month_training_rows)
-                    month_training_score = month_training_result['radar_value']
+                    month_training_result = calculate_training_score_with_penalty(
+                        month_training_rows,
+                        30,  # 单月30天
+                        cert_years,
+                        algo_config
+                    )
+                    month_training_score = month_training_result['radar_score']  # 修复：使用正确的键名
+                    print(f"  - 培训: {month_training_score} ({len(month_training_rows)}条记录)")
                 else:
                     month_training_score = 0
+                    print(f"  - 培训: 无数据")
 
-                # 计算该月综合分
+                # 计算该月综合分（使用配置权重）
                 month_comprehensive = (
-                    month_perf_score * 0.35 / (0.35 + 0.30 + 0.20) +
-                    month_safety_score * 0.30 / (0.35 + 0.30 + 0.20) +
-                    month_training_score * 0.20 / (0.35 + 0.30 + 0.20)
-                ) * 100
+                    month_perf_score * score_weights.get('performance', 0.35) +
+                    month_safety_score * score_weights.get('safety', 0.30) +
+                    month_training_score * score_weights.get('training', 0.20)
+                )
+                print(f"  → 综合分: {month_comprehensive:.2f}")
                 score_list.append(month_comprehensive)
 
             # 使用长周期算法
+            print(f"DEBUG: score_list 长度 = {len(score_list)}, 内容前3项 = {score_list[:3]}")
             if len(score_list) >= 2:
-                learning_result = calculate_learning_ability_longterm(score_list)
+                print(f"DEBUG: 使用长周期算法，score_list 完整内容 = {score_list}")
+                learning_result = calculate_learning_ability_longterm(
+                    score_list,
+                    algo_config,
+                    current_three_dim_score=current_comprehensive  # 传入当前三维综合分
+                )
+                print(f"DEBUG: 长周期算法返回 = {learning_result}")
             else:
                 # 数据不足，使用月度算法
+                print(f"DEBUG: 数据不足 (len={len(score_list)})，使用月度算法")
                 learning_result = calculate_learning_ability_monthly(current_comprehensive, current_comprehensive)
         except Exception as e:
             # 异常情况：使用当前分
+            print(f"ERROR: 学习能力计算异常 - {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             learning_result = calculate_learning_ability_monthly(current_comprehensive, current_comprehensive)
 
     # 提取学习能力分值和详情
@@ -2934,24 +3154,132 @@ def api_comprehensive_profile(emp_no):
         learning_delta = 0
         learning_slope = 0
 
-    # 6. 稳定性评估（工作年限）
-    if entry_date:
-        try:
-            entry = datetime.strptime(entry_date, '%Y-%m-%d')
-            years = (datetime.now() - entry).days / 365
-            stability_score = min(100, years * 33.3)
-        except:
+    # 6. 稳定性评估（综合算法：资历60% + 表现稳定性40%）
+    # 查询用户筛选日期范围内的历史分数用于波动度计算
+    try:
+        from datetime import datetime, timedelta
+        import calendar
+
+        # 构建用户筛选日期范围的月份列表（与左侧API一致）
+        if start_date and end_date:
+            start_dt_stability = datetime.strptime(start_date + '-01', '%Y-%m-%d')
+            end_dt_stability = datetime.strptime(end_date + '-01', '%Y-%m-%d')
+        else:
+            # 如果没有筛选，使用过去12个月
+            end_dt_stability = datetime.now()
+            start_dt_stability = end_dt_stability - timedelta(days=365)
+
+        month_list = []
+        current_month = start_dt_stability.replace(day=1)
+        while current_month <= end_dt_stability:
+            month_list.append(current_month.strftime('%Y-%m'))
+            # 移动到下个月
+            if current_month.month == 12:
+                current_month = current_month.replace(year=current_month.year + 1, month=1)
+            else:
+                current_month = current_month.replace(month=current_month.month + 1)
+
+        # 查询每个月的三维分数
+        historical_scores = {
+            'performance': [],
+            'safety': [],
+            'training': []
+        }
+
+        for month_str in month_list:
+            # 查询该月绩效分
+            cur.execute("""
+                SELECT score, grade FROM performance_records
+                WHERE emp_no = ? AND (year || '-' || printf('%02d', month)) = ?
+            """, [emp_no, month_str])
+            month_perf_row = cur.fetchone()
+            if month_perf_row:
+                month_perf_score = calculate_performance_score_monthly(
+                    month_perf_row[1] if month_perf_row[1] else 'B+',
+                    float(month_perf_row[0]) if month_perf_row[0] else 95,
+                    algo_config
+                )['radar_value']
+                historical_scores['performance'].append(month_perf_score)
+
+            # 查询该月安全分
+            cur.execute("""
+                SELECT assessment, inspection_date
+                FROM safety_inspection_records
+                WHERE inspected_person = ? AND strftime('%Y-%m', inspection_date) = ?
+                ORDER BY inspection_date
+            """, [emp_name, month_str])
+            month_safety_rows = cur.fetchall()
+            if month_safety_rows:
+                # 提取扣分值
+                violations = []
+                for row in month_safety_rows:
+                    score = extract_score_from_assessment(row[0])
+                    if score > 0:
+                        violations.append(float(score))
+
+                if violations:
+                    month_safety_result = calculate_safety_score_dual_track(
+                        violations,
+                        1,  # 单月
+                        algo_config
+                    )
+                    historical_scores['safety'].append(month_safety_result['final_score'])
+
+            # 查询该月培训分
+            cur.execute("""
+                SELECT score, is_qualified, is_disqualified, training_date FROM training_records
+                WHERE emp_no = ? AND strftime('%Y-%m', training_date) = ?
+            """, [emp_no, month_str])
+            month_training_rows = cur.fetchall()
+            if month_training_rows:
+                month_training_result = calculate_training_score_with_penalty(
+                    month_training_rows,
+                    30,  # 单月30天
+                    cert_years,
+                    algo_config
+                )
+                historical_scores['training'].append(month_training_result['radar_score'])
+
+        # 调用综合稳定性算法
+        print(f"DEBUG [comprehensive-profile-员工{emp_no}]: 稳定性算法参数:")
+        print(f"  - birth_date={birth_date}, work_start_date={work_start_date}")
+        print(f"  - entry_date={entry_date}, cert_date={cert_date}, solo_date={solo_date}")
+        print(f"  - historical_scores: perf={len(historical_scores['performance'])}条, safety={len(historical_scores['safety'])}条, training={len(historical_scores['training'])}条")
+        stability_result = calculate_stability_score(
+            birth_date=birth_date,
+            work_start_date=work_start_date,
+            entry_date=entry_date,
+            certification_date=cert_date,
+            solo_driving_date=solo_date,
+            historical_scores=historical_scores if any(historical_scores.values()) else None,
+            config=algo_config
+        )
+        stability_score = stability_result['stability_score']
+        print(f"DEBUG [comprehensive-profile-员工{emp_no}]: 稳定性分数={stability_score:.1f}（综合算法）")
+
+    except Exception as e:
+        # 异常情况：使用简单计算作为降级方案
+        print(f"稳定性算法异常: {e}")
+        import traceback
+        traceback.print_exc()
+        if entry_date:
+            try:
+                entry = datetime.strptime(entry_date, '%Y-%m-%d')
+                years = (datetime.now() - entry).days / 365
+                stability_score = min(100, years * 33.3)
+            except:
+                stability_score = 50
+        else:
             stability_score = 50
-    else:
-        stability_score = 50
 
     # 7. 计算综合能力分数（加权平均 - 使用配置权重）
-    comprehensive_score = (
+    comprehensive_score = round(
         performance_score * score_weights['performance'] +
         safety_score * score_weights['safety'] +
         training_score * score_weights['training'] +
         stability_score * score_weights['stability'] +
-        learning_score * score_weights['learning']
+        learning_score * score_weights['learning'],
+        1
     )
 
     return jsonify({

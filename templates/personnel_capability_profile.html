@@ -112,6 +112,7 @@
         display: flex;
         flex-direction: column;
         gap: 20px;
+        overflow-y: auto;  /* 添加滚动条 */
     }
 
     .chart-container {
@@ -319,10 +320,10 @@
                         </div>
                     </div>
 
-                    <!-- 四个模块的统计数据 -->
+                    <!-- 五个模块的统计数据 -->
                     <div class="row g-3">
-                        <div class="col-md-3">
-                            <div class="card">
+                        <div class="col-md-4 col-lg">
+                            <div class="card h-100">
                                 <div class="card-header bg-light">
                                     <strong>人员信息</strong>
                                 </div>
@@ -334,8 +335,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card">
+                        <div class="col-md-4 col-lg">
+                            <div class="card h-100">
                                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
                                     <strong>安全记录</strong>
                                     <span id="safetyAlertBadge" class="badge bg-success">✅ 安全</span>
@@ -351,8 +352,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card">
+                        <div class="col-md-4 col-lg">
+                            <div class="card h-100">
                                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
                                     <strong>培训能力</strong>
                                     <span id="trainingAlertBadge" class="badge bg-success">✅ 能力达标</span>
@@ -366,8 +367,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card">
+                        <div class="col-md-4 col-lg">
+                            <div class="card h-100">
                                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
                                     <strong>绩效数据</strong>
                                     <span id="performanceAlertBadge" class="badge bg-success">✅ 达标</span>
@@ -381,11 +382,27 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="col-md-4 col-lg">
+                            <div class="card h-100">
+                                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                    <strong>学习能力</strong>
+                                    <span id="learningAlertBadge" class="badge bg-success">✅ 稳定</span>
+                                </div>
+                                <div class="card-body" id="learningStats">
+                                    <p class="mb-1"><span class="text-muted">学习分值:</span> <span class="text-info" id="learningScoreValue">--</span> 分</p>
+                                    <p class="mb-1"><span class="text-muted">能力等级:</span> <span id="learningTier">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">变化趋势:</span> <span id="learningDelta">--</span></p>
+                                    <p class="mb-1"><span class="text-muted">成长斜率:</span> <span id="learningSlope">--</span></p>
+                                    <p class="mb-0"><span class="text-muted">统计月数:</span> <span id="learningMonths">--</span> 月</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -686,6 +703,50 @@
                 perfAlertBadge.classList.add('bg-warning');
             } else if (data.performance_details.status_color === 'RED') {
                 perfAlertBadge.classList.add('bg-danger');
+            }
+
+            // 更新学习能力卡片
+            const learningDetails = data.learning_details;
+            if (learningDetails) {
+                document.getElementById('learningScoreValue').textContent = data.scores.learning.toFixed(1);
+                document.getElementById('learningTier').textContent = learningDetails.tier || '--';
+
+                // 变化趋势
+                const delta = learningDetails.delta;
+                if (delta !== undefined && delta !== null) {
+                    const deltaText = delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1);
+                    const deltaColor = delta > 0 ? 'text-success' : (delta < 0 ? 'text-danger' : 'text-muted');
+                    document.getElementById('learningDelta').innerHTML = `<span class="${deltaColor}">${deltaText}</span>`;
+                } else {
+                    document.getElementById('learningDelta').textContent = '--';
+                }
+
+                // 成长斜率
+                const slope = learningDetails.slope;
+                if (slope !== undefined && slope !== null) {
+                    document.getElementById('learningSlope').textContent = slope.toFixed(2);
+                } else {
+                    document.getElementById('learningSlope').textContent = '--';
+                }
+
+                // 统计月数
+                document.getElementById('learningMonths').textContent = learningDetails.months || '--';
+
+                // 更新警示标签
+                const learningBadge = document.getElementById('learningAlertBadge');
+                learningBadge.textContent = learningDetails.alert_tag || '✅ 稳定';
+                learningBadge.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-secondary', 'bg-info');
+
+                const statusColor = learningDetails.status_color;
+                if (statusColor === 'GREEN') {
+                    learningBadge.classList.add('bg-success');
+                } else if (statusColor === 'ORANGE' || statusColor === 'YELLOW') {
+                    learningBadge.classList.add('bg-warning');
+                } else if (statusColor === 'RED') {
+                    learningBadge.classList.add('bg-danger');
+                } else {
+                    learningBadge.classList.add('bg-info');
+                }
             }
 
             // 渲染五维雷达图

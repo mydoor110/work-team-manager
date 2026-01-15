@@ -388,19 +388,19 @@ def api_preview_effect():
 
         result['current']['learning'] = {
             'historical_count': len(historical_scores),
-            'avg_score': learning_current.get('avg', 0),
+            'avg_score': learning_current.get('average_score', 0),
             'trend_slope': round(k, 2),
             'tier': learning_current.get('tier', '未知'),
-            'final_score': learning_current.get('score', 0),
-            'trend_description': f"过去{len(historical_scores)}个月平均分{learning_current.get('avg', 0):.1f}，斜率{k:.2f}"
+            'final_score': learning_current.get('learning_score', 0),
+            'trend_description': f"过去{len(historical_scores)}个月平均分{learning_current.get('average_score', 0):.1f}，斜率{k:.2f}"
         }
         result['new']['learning'] = {
             'historical_count': len(historical_scores),
-            'avg_score': learning_new.get('avg', 0),
+            'avg_score': learning_new.get('average_score', 0),
             'trend_slope': round(k, 2),
             'tier': learning_new.get('tier', '未知'),
-            'final_score': learning_new.get('score', 0),
-            'trend_description': f"过去{len(historical_scores)}个月平均分{learning_new.get('avg', 0):.1f}，斜率{k:.2f}"
+            'final_score': learning_new.get('learning_score', 0),
+            'trend_description': f"过去{len(historical_scores)}个月平均分{learning_new.get('average_score', 0):.1f}，斜率{k:.2f}"
         }
 
         return jsonify({
